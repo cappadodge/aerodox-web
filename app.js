@@ -90,6 +90,13 @@ async function loadAvatar() {
   const { data } = await sb.storage.from(BUCKET).createSignedUrl(p, 86400);
   if (data && data.signedUrl) S.avatarUrl = data.signedUrl;
 }
+async function loadAvatars() {
+  S.avatarMap = {};
+  const ps = (S.profiles || []).filter(x => x.avatar_path);
+  if (!ps.length) return;
+  const { data } = await sb.storage.from(BUCKET).createSignedUrls(ps.map(x => x.avatar_path), 86400);
+  (data || []).forEach((r, i) => { if (r && r.signedUrl) S.avatarMap[ps[i].id] = r.signedUrl; });
+}
 async function loadLogo() {
   S.logoUrl = "";
   const p = S.company && S.company.logo_path;
@@ -147,6 +154,7 @@ async function boot(user) {
   await loadAll();
   await loadLogo();
   await loadAvatar().catch(() => {});
+  if (isAdmin()) await loadAvatars().catch(() => {});
   S.tab = "dash"; S.menu = 0; S.person = 0; S.month = fd(new Date()).slice(0, 7);
   render();
 }
@@ -208,10 +216,11 @@ function mAlerts() {
 }
 
 /* ---------- ekranlar ---------- */
-function avatarBox(sz) {
-  const ini = ((S.profile && S.profile.full_name) || (S.user && S.user.email) || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
-  return S.avatarUrl
-    ? `<img src="${esc(S.avatarUrl)}" alt="" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;flex:none">`
+function avatarBox(sz, url, name) {
+  if (url === undefined) url = S.avatarUrl;
+  const ini = (name || (S.profile && S.profile.full_name) || (S.user && S.user.email) || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  return url
+    ? `<img src="${esc(url)}" alt="" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;flex:none">`
     : `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:var(--pr);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(sz / 2.6)}px;flex:none">${esc(ini)}</div>`;
 }
 function profBox() {
@@ -249,6 +258,12 @@ function dashView() {
   <div class="card stat"><b style="color:var(--er)">${ex.length}</b><span class="mu">Süresi dolmuş</span></div></div>
   <h2>Dikkat gerektirenler</h2>${[...ex, ...so].map(d => `<div class="card row"><div>${esc(d.t)}<div class="mu">${esc(who(d))} · ${esc(d.d)}</div></div><span class="badge ${st(d.d)[0]}">${st(d.d)[1]}</span></div>`).join("") || '<p class="mu">Şu an uyarı yok.</p>'}`;
 }
+function personHead(person) {
+  if (!person) return "";
+  const pr = (S.profiles || []).find(x => x.id === person.u);
+  const url = pr && S.avatarMap ? S.avatarMap[pr.id] : "";
+  return `<div class="card" style="display:flex;align-items:center;gap:14px">${avatarBox(64, url, person.n)}<div style="min-width:0"><b style="font-size:16px">${esc(person.n)}</b><div class="mu">${esc(person.r)}${pr ? " · hesap: " + esc(pr.full_name || "") : " · giriş hesabı bağlı değil"}</div></div></div>`;
+}
 function linkCard(person) {
   if (!person) return "";
   const linked = (S.profiles || []).find(x => x.id === person.u);
@@ -263,7 +278,7 @@ function docView() {
   const list = S.docs.filter(d => d.k === k && (k === "co" || d.sid === sid));
   const canUp = k === "co" ? adm : !!person;
   return `<div style="margin-top:14px">${k === "pe" && !person && !adm ? '<div class="card mu">Hesabınız henüz bir personel kaydına bağlanmamış. Lütfen yöneticinize başvurun.</div>' : ""}${k === "pe" && adm ? `<select onchange="S.person=+this.value;render()">${S.people.map((x, i) => `<option value="${i}" ${i === S.person ? "selected" : ""}>${esc(x.n)} (${esc(x.r)})</option>`).join("")}</select>` : ""}
-  ${k === "pe" ? (adm ? pAdd(true) + linkCard(person) : "") + chk(sid, person) : ""}${canUp ? `<div class="card"><b>Evrak yükle</b><div style="height:8px"></div>
+  ${k === "pe" ? (adm ? pAdd(true) + personHead(person) + linkCard(person) : "") + chk(sid, person) : ""}${canUp ? `<div class="card"><b>Evrak yükle</b><div style="height:8px"></div>
   <select id="t">${ty.map(x => `<option>${esc(x)}</option>`).join("")}</select>
   <label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date">
   <input id="f" type="file" accept=".pdf,image/*">
