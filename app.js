@@ -182,6 +182,8 @@ function wAlerts() {
   });
   return o;
 }
+/* AeroDoX sıcak hava balonu simgesi (logodaki balon) */
+const BI = (sz = 22) => `<svg viewBox="0 0 120 142" width="${sz}" height="${Math.round(sz * 142 / 120)}" aria-hidden="true" style="vertical-align:-5px;margin-right:6px;flex:none"><path d="M60 6C28 6 10 30 10 54c0 22 16 38 32 50h36c16-12 32-28 32-50C110 30 92 6 60 6z" fill="#0b3d91"/><path d="M39 34l42 50" stroke="#8ec5ff" stroke-width="10" stroke-linecap="round"/><path d="M81 34L39 84" stroke="#fff" stroke-width="10" stroke-linecap="round"/><path d="M44 104l6 12M76 104l-6 12" stroke="#0b3d91" stroke-width="3" stroke-linecap="round"/><rect x="44" y="116" width="32" height="20" rx="4" fill="#8ec5ff" stroke="#0b3d91" stroke-width="3"/></svg>`;
 const mapB = x => ({ id: x.id, r: x.registration, h: Number(x.hours_since_100h) || 0, a: x.annual_due, t: Number(x.total_hours) || 0, lm: x.last_maint_date, arc: x.arc_start, ts: x.temp_sensor_code || "", br: x.brand || "", md: x.model || "", ft: x.fuel_tanks || "", bu: x.burner_serial || "", ins: x.insurance_start });
 function bkInfo(b) { return { h: Math.round((100 - b.h) * 10) / 10, dl: b.a ? Math.ceil((new Date(b.a) - new Date()) / 864e5) : 999 }; }
 function mAlerts() {
@@ -257,12 +259,14 @@ function bkView() {
   const t = c => c === "ok" ? "İyi" : c === "wa" ? "Yaklaşıyor" : "Gecikti";
   const sum = S.balloons.map(b => {
     const n = bkInfo(b), c1 = n.h <= 0 ? "er" : n.h <= 10 ? "wa" : "ok", c2 = n.dl < 0 ? "er" : n.dl <= 10 ? "wa" : "ok";
-    return `<tr><td><b>${esc(b.r)}</b></td><td>${b.t}</td><td><span class="badge ${c1}">${n.h} sa</span></td><td>${b.lm ? esc(b.lm) : "-"}</td><td><span class="badge ${c2}">${b.a ? esc(b.a) : "-"}</span></td></tr>`;
+    return `<div style="border-top:1px solid var(--bd);padding:10px 0"><div class="row"><b style="display:flex;align-items:center">${BI(22)}${esc(b.r)}</b><span class="badge ${c1}">${n.h <= 0 ? "Bakım gecikti" : n.h + " saat kaldı"}</span></div>
+<div class="grid" style="margin-top:6px;gap:6px;font-size:13px"><div><span class="mu">Güncel uçuş saati</span><br><b>${b.t} sa</b></div><div><span class="mu">Son bakım</span><br><b>${b.lm ? esc(b.lm) : "-"}</b></div>
+<div><span class="mu">Bu bakımdan beri</span><br><b>${b.h} sa</b></div><div><span class="mu">Yıllık bakım</span><br><span class="badge ${c2}">${b.a ? esc(b.a) : "-"}</span></div></div></div>`;
   }).join("");
   return `<div style="margin-top:14px"><div class="card"><b>🔧 100 saatlik bakım çizelgesi</b><div class="mu" style="margin:4px 0 8px">Kalan süre 10 saat veya 10 günün altına inince panelde bildirim çıkar.</div>
-${S.balloons.length ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;white-space:nowrap"><tr class="mu" style="text-align:left"><th>Balon</th><th>Güncel uçuş saati</th><th>100 saate kalan</th><th>Son bakım</th><th>Yıllık bakım</th></tr>${sum}</table></div>` : '<p class="mu">Henüz balon yok.</p>'}</div>
+${S.balloons.length ? sum : '<p class="mu">Henüz balon yok.</p>'}</div>
 <h2>Balonlar</h2><div class="mu" style="margin-bottom:8px">Ayrıntı için balonun tescil adına dokun.</div>
-${S.balloons.map(b => `<button class="sec" style="text-align:left" onclick="S.bal='${b.id}';render()">🎈 ${esc(b.r)} ›</button>`).join("")}
+${S.balloons.map(b => `<button class="sec" style="text-align:left" onclick="S.bal='${b.id}';render()"><span style="display:flex;align-items:center">${BI(22)}${esc(b.r)}</span></button>`).join("")}
 <div class="card" ${isAdmin() ? "" : "hidden"} style="margin-top:14px"><b>➕ Balon ekle</b><div style="height:8px"></div>
 <input id="br" placeholder="Tescil (örn. TC-ABC)">
 <label class="mu">Güncel toplam uçuş saati</label><input id="bt" type="number" min="0" step="0.1" value="0">
@@ -276,7 +280,7 @@ function balView() {
   const info = [["Uçuşa elverişlilik başlangıç tarihi", b.arc], ["Isı sensörü kodu", b.ts], ["Balon marka adı", b.br], ["Balon tip / model", b.md], ["Yakıt tankı seri numaraları", b.ft], ["Burner seri numarası", b.bu], ["Balon sigorta başlangıç tarihi", b.ins]];
   const ad = isAdmin();
   return `<div style="margin-top:14px"><button class="sec" onclick="S.bal=null;render()">‹ Balon listesi</button>
-<div class="card"><div class="row"><b style="font-size:18px">🎈 ${esc(b.r)}</b></div>
+<div class="card"><div class="row"><b style="font-size:18px;display:flex;align-items:center">${BI(28)}${esc(b.r)}</b></div>
 <div class="row" style="margin-top:8px"><span>Güncel toplam uçuş saati</span><b>${b.t} sa</b></div>
 <div class="row" style="margin-top:6px"><span>100 saatlik bakıma kalan: ${n.h} saat</span><span class="badge ${c1}">${t(c1)}</span></div>
 <div class="row" style="margin-top:6px"><span>Son bakım tarihi: ${b.lm ? esc(b.lm) : "-"}</span></div>
@@ -296,7 +300,7 @@ ${ad ? `<details class="card"><summary><b>✏️ Bilgileri düzenle (yönetici)<
 <label class="mu">Isı sensörü kodu</label><input id="es" value="${esc(b.ts)}">
 <label class="mu">Balon marka adı</label><input id="eb" value="${esc(b.br)}">
 <label class="mu">Balon tip / model</label><input id="em" value="${esc(b.md)}">
-<label class="mu">Yakıt tankı seri numaraları (her satıra bir tane)</label><textarea id="ef" rows="4" style="width:100%">${esc(b.ft)}</textarea>
+<label class="mu">Yakıt tankı seri numaraları (her satıra bir tane)</label><textarea id="ef" rows="4" style="width:100%;font:inherit;padding:10px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx);box-sizing:border-box">${esc(b.ft)}</textarea>
 <label class="mu">Burner seri numarası</label><input id="eu" value="${esc(b.bu)}">
 <label class="mu">Balon sigorta başlangıç tarihi</label><input id="ei" type="date" value="${esc(b.ins || "")}">
 <button onclick="run(()=>saveB('${b.id}'))">Kaydet</button>
