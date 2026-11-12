@@ -11,7 +11,7 @@ const S = {
   people: [], allStaff: [], docs: [], balloons: [], logs: [],
 };
 
-const CT = ["İşletme El Kitabı", "İşletme Şartları", "Balon Sigorta Evrakları", "CAO Anlaşmaları", "Balon Telsiz Ruhsatları", "Balon Tescil", "Balon Uçuşa Elverişlilik Evrakları", "Aylık Uçuş Çizelgesi", "Yer İşletme Aylık Kontrol Çizelgesi"];
+const CT = ["İşletme El Kitabı", "İşletme Şartları", "Balon Sigorta Evrakları", "CAO Anlaşmaları", "Balon Telsiz Ruhsatları", "Balon Tescil", "Balon Uçuşa Elverişlilik Evrakları"];
 const PT = ["Dil Yeterlilik Belgesi", "Pilot Lisansı", "Sağlık Sertifikası", "Mezuniyet Diploması", "İlk Yardım Belgesi", "KDM Belgeleri"];
 const ROLES = ["Pilot", "Yer Ekibi", "Rezervasyon", "Diğer"];
 const ROLE_TO_DB = { "Pilot": "pilot", "Yer Ekibi": "ground", "Rezervasyon": "reservation", "Diğer": "other" };
@@ -79,7 +79,7 @@ async function loadAll() {
   S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null }));
   S.profiles = pf; S.joins = jr;
   S.people = S.allStaff.filter(x => x.on);
-  S.docs = dc.map(x => ({ id: x.id, k: x.scope === "company" ? "co" : "pe", sid: x.staff_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
+  S.docs = dc.filter(x => x.scope !== "company" || CT.includes(x.doc_type)).map(x => ({ id: x.id, k: x.scope === "company" ? "co" : "pe", sid: x.staff_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
   S.balloons = bl.map(mapB);
   S.logs = lg.map(x => ({ id: x.id, d: x.log_date, sid: x.staff_id, w: Number(x.duty_hours) || 0, f: Number(x.flight_hours) || 0, s: STATUS_FROM_DB[x.status] || "u" }));
   if (S.person >= S.people.length) S.person = 0;
@@ -326,7 +326,25 @@ function linkCard(person) {
   const opts = (S.profiles || []).filter(x => !used.has(x.id)).map(x => `<option value="${x.id}" ${x.id === person.u ? "selected" : ""}>${esc(x.full_name || "(adsız)")}${x.role === "admin" ? " · yönetici" : ""}</option>`).join("");
   return `<details class="card"><summary><b>🔗 Giriş hesabı</b> <span class="mu">${linked ? "· " + esc(linked.full_name) : "· bağlı değil"}</span></summary><div class="mu" style="margin:8px 0">Bu kişinin giriş hesabını seç. Bağlanan kullanıcı sadece bu kişinin evraklarını görür ve yükleyebilir.</div><select id="lk"><option value="">Bağlı değil</option>${opts}</select><button onclick="run(()=>linkP('${person.id}'))">Kaydet</button></details>`;
 }
+function coView() {
+  const adm = isAdmin();
+  if (!CT.includes(S.ct)) S.ct = CT[0];
+  const of = t => S.docs.filter(d => d.k === "co" && d.t === t);
+  const chips = CT.map((t, i) => {
+    const n = of(t).length, bad = of(t).some(d => d.d && st(d.d)[0] === "er");
+    return `<button class="${t === S.ct ? "" : "sec"}" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="S.ct=CT[${i}];render()">${esc(t)}${n ? " · " + n : ""}${bad ? " ⚠" : ""}</button>`;
+  }).join("");
+  const list = of(S.ct);
+  return `<div style="margin-top:14px"><div style="display:flex;flex-wrap:wrap;gap:8px">${chips}</div>
+<h2>${esc(S.ct)}</h2>
+${list.map(d => `<div class="card"><div class="row"><b>${esc(d.f || d.t)}</b><span class="badge ${st(d.d)[0]}">${st(d.d)[1]}</span></div>
+<div class="mu">${d.d ? "Bitiş: " + esc(d.d) : "Bitiş tarihi yok"}</div>
+<div class="row"><button class="sec" style="width:auto;margin:8px 0 0" onclick="run(()=>viewDoc('${d.id}'))">Görüntüle</button>${adm ? `<button class="x" onclick="run(()=>delDoc('${d.id}'))">🗑 Evrakı sil</button>` : ""}</div></div>`).join("") || '<p class="mu">Bu kategoride evrak yok.</p>'}
+${adm ? `<details class="card"><summary><b>➕ Bu kategoriye evrak yükle</b></summary><div style="height:8px"></div><input id="t" type="hidden" value="${esc(S.ct)}">
+<label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date"><input id="f" type="file" accept=".pdf,image/*"><button onclick="run(()=>up('co'))">Yükle</button></details>` : ""}</div>`;
+}
 function docView() {
+  if (S.tab === "co") return coView();
   const adm = isAdmin();
   const k = S.tab, ty = k === "co" ? CT : PT;
   const person = S.people[S.person], sid = k === "pe" && person ? person.id : null;
