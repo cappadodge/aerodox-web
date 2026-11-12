@@ -193,7 +193,7 @@ function mAlerts() {
     if (i.h <= 10) o.push([i.h <= 0 ? "er" : "wa", b.r + ": 100 saatlik bakım " + (i.h <= 0 ? "gecikti (" + (-i.h) + " saat aşıldı)" : "için " + i.h + " saat kaldı")]);
     if (b.a && i.dl <= 10) o.push([i.dl < 0 ? "er" : "wa", b.r + ": yıllık bakım " + (i.dl < 0 ? (-i.dl) + " gün gecikti" : "için " + i.dl + " gün kaldı")]);
   });
-  o.push(...wAlerts());
+  if (isAdmin()) o.push(...wAlerts());
   return o.length ? `<div style="margin-top:14px">${o.map(x => `<div class="card row" style="border-color:var(--${x[0]})"><span>🔔 ${esc(x[1])}</span><span class="badge ${x[0]}">${x[0] === "er" ? "Acil" : "Yaklaşıyor"}</span></div>`).join("")}</div>` : "";
 }
 
@@ -202,11 +202,12 @@ function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
 function nav() {
-  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]];
+  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || isAdmin());
   return `<div class="bd" onclick="S.menu=0;render()"></div><div class="dr"><b style="padding:0 12px 8px">Menü</b>${items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("")}</div>`;
 }
 function render() {
   if (!S.user || !S.company) return;
+  if (S.tab === "pl" && !isAdmin()) S.tab = "dash";
   const head = `<div class="cn"><span class="cb">AeroDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isAdmin() ? " · Yönetici" : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
   let b = "";
   if (S.tab === "dash") b = dashView();
@@ -313,8 +314,10 @@ function wInfo(sids) {
 function grid(m, sids, rows) {
   const [y, mo] = m.split("-"), n = new Date(y, mo, 0).getDate(), pr = { u: 4, c: 3, i: 2, n: 1 }, c = {};
   rows.forEach(l => { const k = l.sid + "|" + Number(l.d.slice(8)); if (!c[k] || pr[l.s] > pr[c[k]]) c[k] = l.s; });
-  const days = Array.from({ length: n }, (_, i) => i + 1);
-  return `<h2>${mn(m)} aylık çizelge</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}</tr>${sids.map(sid => `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => `<td>${c[sid + "|" + d] ? ST[c[sid + "|" + d]][0] : ""}</td>`).join("")}</tr>`).join("")}</table></div><p class="mu">✈️ Uçtu · 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
+  const days = Array.from({ length: n }, (_, i) => i + 1), tt = {};
+  rows.forEach(l => { const t = tt[l.sid] = tt[l.sid] || { f: 0, w: 0 }; t.f += l.f; t.w += l.w; });
+  const tc = 'style="text-align:center;font-weight:700;white-space:nowrap;padding:4px 8px"';
+  return `<h2>${mn(m)} aylık çizelge</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>Uçuş saati toplamı</th><th ${tc}>Çalışma saati toplamı</th></tr>${sids.map(sid => { const t = tt[sid] || { f: 0, w: 0 }; return `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => `<td>${c[sid + "|" + d] ? ST[c[sid + "|" + d]][0] : ""}</td>`).join("")}<td ${tc}>${r1(t.f)}</td><td ${tc}>${r1(t.w)}</td></tr>`; }).join("")}</table></div><p class="mu">✈️ Uçtu · 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
 }
 function plView() {
   const cur = fd(new Date()).slice(0, 7), ed = S.month === cur;

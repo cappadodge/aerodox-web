@@ -75,7 +75,7 @@ const canDel=f=>(typeof isAdmin==="function"&&isAdmin())||f.sim;
 
 /* ---------- depolama: IndexedDB (şirket başına ayrı), olmazsa bellek ---------- */
 let dbp=null;const mem={flights:new Map(),meta:new Map()};
-function openDB(){if(!dbp)dbp=new Promise((res,rej)=>{try{const r=indexedDB.open("aerodox-fl-"+Q.co,1);r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore("flights",{keyPath:"id"});d.createObjectStore("meta",{keyPath:"key"})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error||new Error("idb"));r.onblocked=()=>rej(new Error("blocked"))}catch(e){rej(e)}});return dbp}
+function openDB(){if(!dbp)dbp=new Promise((res,rej)=>{try{const r=indexedDB.open("aerodox-fl-"+Q.co+"-"+(S.user?S.user.id:"anon"),1);r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore("flights",{keyPath:"id"});d.createObjectStore("meta",{keyPath:"key"})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error||new Error("idb"));r.onblocked=()=>rej(new Error("blocked"))}catch(e){rej(e)}});return dbp}
 async function tx(s,mode,fn){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,mode);const rq=fn(t.objectStore(s));t.oncomplete=()=>res(rq?rq.result:undefined);t.onerror=t.onabort=()=>rej(t.error||new Error("tx"))})}
 const keyOf=(s,v)=>s==="flights"?v.id:v.key;
 async function dbPut(s,v){try{await tx(s,"readwrite",o=>o.put(v))}catch(e){Q.persistent=false;mem[s].set(keyOf(s,v),v)}}
