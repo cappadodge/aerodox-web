@@ -68,16 +68,17 @@ async function fetchAll(mk) { // Supabase tek istekte en fazla 1000 satır verir
 /* ---------- veri yükleme ---------- */
 async function loadAll() {
   const d = new Date(); d.setMonth(d.getMonth() - 24); const since = fd(d);
-  const [st, dc, bl, lg, pf, jr] = await Promise.all([
+  const [st, dc, bl, lg, pf, ml, jr] = await Promise.all([
     fetchAll(() => sb.from("staff").select("*").order("created_at")),
     fetchAll(() => sb.from("documents").select("*").order("created_at")),
     fetchAll(() => sb.from("balloons").select("*").order("created_at")),
     fetchAll(() => sb.from("duty_logs").select("*").gte("log_date", since).order("log_date")),
     isAdmin() ? fetchAll(() => sb.from("profiles").select("*").order("full_name")) : Promise.resolve([]),
+    fetchAll(() => sb.from("maintenance_logs").select("*").order("done_on", { ascending: false })).catch(() => []),
     isAdmin() ? fetchAll(() => sb.from("join_requests").select("*").eq("status", "pending").order("created_at")).catch(() => []) : Promise.resolve([]),
   ]);
   S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null }));
-  S.profiles = pf; S.joins = jr;
+  S.profiles = pf; S.joins = jr; S.mlogs = ml.map(mapM);
   S.people = S.allStaff.filter(x => x.on);
   S.docs = dc.filter(x => x.scope !== "company" || CT.includes(x.doc_type)).map(x => ({ id: x.id, k: x.scope === "company" ? "co" : "pe", sid: x.staff_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
   S.balloons = bl.map(mapB);
@@ -256,6 +257,8 @@ function wAlerts() {
 }
 /* AeroDoX sıcak hava balonu simgesi (logodaki balon) */
 const BI = (sz = 22) => `<svg viewBox="0 0 120 142" width="${sz}" height="${Math.round(sz * 142 / 120)}" aria-hidden="true" style="vertical-align:-5px;margin-right:6px;flex:none"><path d="M60 6C28 6 10 30 10 54c0 22 16 38 32 50h36c16-12 32-28 32-50C110 30 92 6 60 6z" fill="#0b3d91"/><path d="M39 34l42 50" stroke="#8ec5ff" stroke-width="10" stroke-linecap="round"/><path d="M81 34L39 84" stroke="#fff" stroke-width="10" stroke-linecap="round"/><path d="M44 104l6 12M76 104l-6 12" stroke="#0b3d91" stroke-width="3" stroke-linecap="round"/><rect x="44" y="116" width="32" height="20" rx="4" fill="#8ec5ff" stroke="#0b3d91" stroke-width="3"/></svg>`;
+const MK = { preventive: "Önleyici", corrective: "Düzeltici" };
+const mapM = x => ({ id: x.id, b: x.balloon_id, r: x.balloon_reg || "", w: x.work || "", k: x.kind, d: x.done_on });
 const mapB = x => ({ id: x.id, r: x.registration, h: Number(x.hours_since_100h) || 0, a: x.annual_due, t: Number(x.total_hours) || 0, lm: x.last_maint_date, arc: x.arc_start, ts: x.temp_sensor_code || "", br: x.brand || "", md: x.model || "", ft: x.fuel_tanks || "", bu: x.burner_serial || "", ins: x.insurance_start });
 function bkInfo(b) { return { h: Math.round((100 - b.h) * 10) / 10, dl: b.a ? Math.ceil((new Date(b.a) - new Date()) / 864e5) : 999 }; }
 function mAlerts() {
@@ -373,24 +376,53 @@ function pAdd(del) {
   if (!isAdmin()) return "";
   return `<details class="card"><summary><b>➕ Pilot / personel ekle</b></summary><div style="height:10px"></div><input id="pn" placeholder="Ad Soyad"><select id="pr">${ROLES.map(x => `<option>${x}</option>`).join("")}</select><button onclick="run(addP)">Ekle</button></details>${del && S.people.length ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Seçili personeli çıkar</button>` : ""}`;
 }
+function tabChips(items, cur, setter) {
+  return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${items.map(([k, t]) => `<button class="${k === cur ? "" : "sec"}" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="${setter}='${k}';render()">${esc(t)}</button>`).join("")}</div>`;
+}
 function bkView() {
-  const t = c => c === "ok" ? "İyi" : c === "wa" ? "Yaklaşıyor" : "Gecikti";
+  if (!["per", "bal", "mon"].includes(S.bk)) S.bk = "per";
+  const chips = tabChips([["per", "Periyodik bakım"], ["bal", "Balonlar"], ["mon", "Aylık bakım çizelgesi"]], S.bk, "S.bk");
+  return `<div style="margin-top:14px">${chips}${S.bk === "per" ? perView() : S.bk === "bal" ? balListView() : monView()}</div>`;
+}
+function perView() {
   const sum = S.balloons.map(b => {
     const n = bkInfo(b), c1 = n.h <= 0 ? "er" : n.h <= 10 ? "wa" : "ok", c2 = n.dl < 0 ? "er" : n.dl <= 10 ? "wa" : "ok";
-    return `<div style="border-top:1px solid var(--bd);padding:10px 0"><div class="row"><b style="display:flex;align-items:center">${BI(22)}${esc(b.r)}</b><span class="badge ${c1}">${n.h <= 0 ? "Bakım gecikti" : n.h + " saat kaldı"}</span></div>
+    return `<div style="border-top:1px solid var(--bd);padding:10px 0"><div class="row"><b style="display:flex;align-items:center;cursor:pointer" onclick="S.bal='${b.id}';render()">${BI(22)}${esc(b.r)} ›</b><span class="badge ${c1}">${n.h <= 0 ? "Bakım gecikti" : n.h + " saat kaldı"}</span></div>
 <div class="grid" style="margin-top:6px;gap:6px;font-size:13px"><div><span class="mu">Güncel uçuş saati</span><br><b>${b.t} sa</b></div><div><span class="mu">Son bakım</span><br><b>${b.lm ? esc(b.lm) : "-"}</b></div>
 <div><span class="mu">Bu bakımdan beri</span><br><b>${b.h} sa</b></div><div><span class="mu">Yıllık bakım</span><br><span class="badge ${c2}">${b.a ? esc(b.a) : "-"}</span></div></div></div>`;
   }).join("");
-  return `<div style="margin-top:14px"><div class="card"><b>🔧 100 saatlik bakım çizelgesi</b><div class="mu" style="margin:4px 0 8px">Kalan süre 10 saat veya 10 günün altına inince panelde bildirim çıkar.</div>
-${S.balloons.length ? sum : '<p class="mu">Henüz balon yok.</p>'}</div>
-<h2>Balonlar</h2><div class="mu" style="margin-bottom:8px">Ayrıntı için balonun tescil adına dokun.</div>
-${S.balloons.map(b => `<button class="sec" style="text-align:left" onclick="S.bal='${b.id}';render()"><span style="display:flex;align-items:center">${BI(22)}${esc(b.r)}</span></button>`).join("")}
+  return `<div class="card"><b>🔧 100 saatlik bakım çizelgesi</b><div class="mu" style="margin:4px 0 8px">Kalan süre 10 saat veya 10 günün altına inince panelde bildirim çıkar. Ayrıntı için balonun adına dokun.</div>${S.balloons.length ? sum : '<p class="mu">Henüz balon yok.</p>'}</div>`;
+}
+function balListView() {
+  return `${S.balloons.map(b => `<button class="sec" style="text-align:left" onclick="S.bal='${b.id}';render()"><span style="display:flex;align-items:center">${BI(22)}${esc(b.r)}</span></button>`).join("") || '<p class="mu">Henüz balon yok.</p>'}
 <div class="card" ${isAdmin() ? "" : "hidden"} style="margin-top:14px"><b>➕ Balon ekle</b><div style="height:8px"></div>
 <input id="br" placeholder="Tescil (örn. TC-ABC)">
 <label class="mu">Güncel toplam uçuş saati</label><input id="bt" type="number" min="0" step="0.1" value="0">
 <label class="mu">Son 100 saatlik bakımdan beri uçulan saat</label><input id="bh" type="number" min="0" step="0.1" value="0">
 <label class="mu">Yıllık bakım bitiş tarihi</label><input id="ba" type="date">
-<button onclick="run(addB)">Balon ekle</button></div></div>`;
+<button onclick="run(addB)">Balon ekle</button></div>`;
+}
+function mForm(pre, m) {
+  const bs = S.balloons.map(b => `<option value="${b.id}" ${m && m.b === b.id ? "selected" : ""}>${esc(b.r)}</option>`).join("");
+  return `<label class="mu">Balon (tescil)</label><select id="${pre}b">${bs}</select>
+<label class="mu">Yapılan bakım</label><input id="${pre}w" placeholder="Örn. 100 saatlik bakım, burner conta değişimi" value="${m ? esc(m.w) : ""}">
+<label class="mu">Bakım türü</label><select id="${pre}k"><option value="preventive" ${m && m.k === "preventive" ? "selected" : ""}>Önleyici bakım</option><option value="corrective" ${m && m.k === "corrective" ? "selected" : ""}>Düzeltici bakım</option></select>
+<label class="mu">Bakım işlem tarihi</label><input id="${pre}d" type="date" value="${m ? esc(m.d) : fd(new Date())}">`;
+}
+function monView() {
+  const adm = isAdmin(), cur = fd(new Date()).slice(0, 7);
+  const ms = [...new Set([cur, ...S.mlogs.map(x => x.d.slice(0, 7))])].sort().reverse();
+  if (!ms.includes(S.bm)) S.bm = cur;
+  const rows = S.mlogs.filter(x => x.d.slice(0, 7) === S.bm).sort((a, b) => a.d.localeCompare(b.d));
+  const regOf = x => { const b = S.balloons.find(y => y.id === x.b); return b ? b.r : (x.r || "?"); };
+  const nP = rows.filter(x => x.k === "preventive").length, nC = rows.length - nP;
+  const edit = adm && S.editM ? S.mlogs.find(x => x.id === S.editM) : null;
+  return `<select onchange="S.bm=this.value;S.editM=null;render()">${ms.map(x => `<option value="${x}" ${x === S.bm ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select>
+<h2>${mn(S.bm)} bakım çizelgesi</h2>
+<div class="mu" style="margin-bottom:8px">Toplam ${rows.length} kayıt · ${nP} önleyici · ${nC} düzeltici</div>
+${edit ? `<div class="card"><b>✏️ Kaydı düzenle</b><div style="height:8px"></div>${mForm("x", edit)}<button onclick="run(()=>saveM('${edit.id}'))">Kaydet</button><button class="sec" onclick="S.editM=null;render()">Vazgeç</button><button class="x" onclick="run(()=>delM('${edit.id}'))">🗑 Kaydı sil</button></div>` : ""}
+${rows.length ? `<div style="overflow-x:auto"><table class="gt" style="width:100%;font-size:13px"><tr><th>Tarih</th><th>Balon</th><th>Yapılan bakım</th><th>Tür</th>${adm ? "<th></th>" : ""}</tr>${rows.map(x => `<tr><td style="white-space:nowrap">${esc(x.d.slice(8))}.${esc(x.d.slice(5, 7))}</td><td style="white-space:nowrap"><b>${esc(regOf(x))}</b></td><td style="text-align:left;min-width:120px">${esc(x.w)}</td><td><span class="badge ${x.k === "preventive" ? "ok" : "wa"}">${MK[x.k] || "-"}</span></td>${adm ? `<td><button class="sec" style="width:auto;margin:0;padding:4px 8px" onclick="S.editM='${x.id}';render()">✏️</button></td>` : ""}</tr>`).join("")}</table></div>` : '<p class="mu">Bu ay bakım kaydı yok.</p>'}
+${adm ? `<details class="card" style="margin-top:12px"><summary><b>➕ Bakım kaydı ekle</b></summary><div style="height:8px"></div>${S.balloons.length ? mForm("m") + '<button onclick="run(addM)">Kaydet</button>' : '<p class="mu">Önce Balonlar sekmesinden balon ekleyin.</p>'}</details>` : ""}`;
 }
 function balView() {
   const b = S.balloons.find(x => x.id === S.bal); if (!b) { S.bal = null; return bkView(); }
@@ -564,6 +596,34 @@ async function patchBalloon(id, fields, local) {
   const { error } = await sb.from("balloons").update(fields).eq("id", id); if (error) throw error;
   Object.assign(S.balloons.find(x => x.id === id), local); render();
 }
+async function addM() {
+  if (!isAdmin()) return;
+  const w = val("mw").trim(), d = val("md"), bid = val("mb"), b = S.balloons.find(x => x.id === bid);
+  if (!b || !w || !d) return alert("Balon, yapılan bakım ve tarih gerekli.");
+  const { data, error } = await sb.from("maintenance_logs").insert({ company_id: S.co, balloon_id: bid, balloon_reg: b.r, work: w, kind: val("mk"), done_on: d }).select().single();
+  if (error) throw error;
+  S.mlogs.push(mapM(data)); S.bm = d.slice(0, 7); render(); toast("Bakım kaydı eklendi");
+}
+async function saveM(id) {
+  if (!isAdmin()) return;
+  const w = val("xw").trim(), d = val("xd"), bid = val("xb"), b = S.balloons.find(x => x.id === bid);
+  if (!b || !w || !d) return alert("Balon, yapılan bakım ve tarih gerekli.");
+  const { data, error } = await sb.from("maintenance_logs").update({ balloon_id: bid, balloon_reg: b.r, work: w, kind: val("xk"), done_on: d }).eq("id", id).select().single();
+  if (error) throw error;
+  Object.assign(S.mlogs.find(x => x.id === id), mapM(data)); S.bm = d.slice(0, 7); S.editM = null; render(); toast("Kayıt güncellendi");
+}
+async function delM(id) {
+  if (!isAdmin() || !confirm("Bu bakım kaydı silinsin mi?")) return;
+  const { error } = await sb.from("maintenance_logs").delete().eq("id", id); if (error) throw error;
+  S.mlogs = S.mlogs.filter(x => x.id !== id); S.editM = null; render(); toast("Kayıt silindi");
+}
+async function autoLog(id, work, d) {
+  try {
+    const b = S.balloons.find(x => x.id === id); if (!isAdmin() || !b) return;
+    const { data, error } = await sb.from("maintenance_logs").insert({ company_id: S.co, balloon_id: id, balloon_reg: b.r, work, kind: "preventive", done_on: d }).select().single();
+    if (error) throw error; S.mlogs.push(mapM(data));
+  } catch (e) { console.warn("bakım kaydı eklenemedi", e); }
+}
 async function saveB(id) {
   if (!isAdmin()) return;
   const r = val("er").trim(); if (!r) return alert("Tescil boş olamaz.");
@@ -577,8 +637,8 @@ async function addH(id) {
   const b = S.balloons.find(x => x.id === id), nh = r1(b.h + v), nt = r1(b.t + v);
   await patchBalloon(id, { hours_since_100h: nh, total_hours: nt }, { h: nh, t: nt });
 }
-const done100 = id => { const d = fd(new Date()); return patchBalloon(id, { hours_since_100h: 0, last_maint_date: d }, { h: 0, lm: d }); };
-function doneY(id) { const d = new Date(); d.setFullYear(d.getFullYear() + 1); const s = fd(d); return patchBalloon(id, { annual_due: s }, { a: s }); }
+const done100 = async id => { const d = fd(new Date()); await autoLog(id, "100 saatlik periyodik bakım", d); return patchBalloon(id, { hours_since_100h: 0, last_maint_date: d }, { h: 0, lm: d }); };
+async function doneY(id) { const d = new Date(); d.setFullYear(d.getFullYear() + 1); const s = fd(d); await autoLog(id, "Yıllık periyodik bakım", fd(new Date())); return patchBalloon(id, { annual_due: s }, { a: s }); }
 async function addL() {
   const d = val("pd"), sid = val("pp"), s = val("ps");
   const w = (s === "i" || s === "n") ? 0 : (parseFloat(val("pw")) || 0), f = s === "u" ? (parseFloat(val("pf")) || 0) : 0;
