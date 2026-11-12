@@ -68,15 +68,16 @@ async function fetchAll(mk) { // Supabase tek istekte en fazla 1000 satır verir
 /* ---------- veri yükleme ---------- */
 async function loadAll() {
   const d = new Date(); d.setMonth(d.getMonth() - 24); const since = fd(d);
-  const [st, dc, bl, lg, pf] = await Promise.all([
+  const [st, dc, bl, lg, pf, jr] = await Promise.all([
     fetchAll(() => sb.from("staff").select("*").order("created_at")),
     fetchAll(() => sb.from("documents").select("*").order("created_at")),
     fetchAll(() => sb.from("balloons").select("*").order("created_at")),
     fetchAll(() => sb.from("duty_logs").select("*").gte("log_date", since).order("log_date")),
     isAdmin() ? fetchAll(() => sb.from("profiles").select("*").order("full_name")) : Promise.resolve([]),
+    isAdmin() ? fetchAll(() => sb.from("join_requests").select("*").eq("status", "pending").order("created_at")).catch(() => []) : Promise.resolve([]),
   ]);
   S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null }));
-  S.profiles = pf;
+  S.profiles = pf; S.joins = jr;
   S.people = S.allStaff.filter(x => x.on);
   S.docs = dc.map(x => ({ id: x.id, k: x.scope === "company" ? "co" : "pe", sid: x.staff_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
   S.balloons = bl.map(mapB);
@@ -111,8 +112,56 @@ function loginView(msg) {
 <p class="mu" style="text-align:center;margin:2px 0 24px">Balon operasyonları için evrak ve uçuş takibi</p>
 <input id="u" placeholder="Kullanıcı adı" autocapitalize="none" autocorrect="off" autocomplete="username" value="${esc(val("u"))}">
 <input id="p" type="password" placeholder="Parola" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button></div>`);
+<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button><button class="sec" onclick="signupView()">Hesabın yok mu? Kayıt ol</button></div>`);
 }
+function signupView(msg) {
+  $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Aero</span><b>DoX</b></div>
+<p class="mu" style="text-align:center;margin:2px 0 18px">Kayıt ol. Hesabın, çalıştığın şirketin yöneticisi onaylayınca açılır.</p>
+<input id="sn" placeholder="Ad Soyad" autocomplete="name" value="${esc(val("sn"))}">
+<input id="sc" placeholder="Çalıştığın şirketin adı (tam ve doğru yaz)" value="${esc(val("sc"))}">
+<input id="su" placeholder="Kullanıcı adı (küçük harf, rakam, . _ -)" autocapitalize="none" autocorrect="off" autocomplete="username" value="${esc(val("su"))}">
+<input id="sp1" type="password" placeholder="Parola (en az 8 karakter)" autocomplete="new-password">
+<input id="sp2" type="password" placeholder="Parola (tekrar)" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSignup()">
+<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doSignup()">Kayıt ol</button><button class="sec" onclick="loginView()">‹ Girişe dön</button></div>`);
+}
+async function doSignup() {
+  const fn = val("sn").trim().replace(/\s+/g, " "), cn = val("sc").trim().replace(/\s+/g, " "), un = val("su").trim().toLowerCase(), p1 = val("sp1"), p2 = val("sp2");
+  const err = document.getElementById("e"), btn = document.getElementById("lb");
+  if (!fn || !cn || !un || !p1) { err.textContent = "Tüm alanları doldurun."; return; }
+  if (!/^[a-z0-9._-]{3,30}$/.test(un)) { err.textContent = "Kullanıcı adı 3-30 karakter olmalı; sadece küçük harf (a-z), rakam ve . _ - kullanın. Türkçe karakter ve boşluk olmaz."; return; }
+  if (p1.length < 8) { err.textContent = "Parola en az 8 karakter olmalı."; return; }
+  if (p1 !== p2) { err.textContent = "Parolalar aynı değil."; return; }
+  btn.disabled = true; btn.textContent = "Kaydediliyor…"; err.textContent = "";
+  const { data, error } = await sb.auth.signUp({ email: un + "@" + AERODOX.AUTH_DOMAIN, password: p1, options: { data: { full_name: fn } } });
+  if (error) {
+    btn.disabled = false; btn.textContent = "Kayıt ol";
+    const m = error.message || "";
+    err.textContent = /already|registered|exists/i.test(m) ? "Bu kullanıcı adı alınmış. Başka bir kullanıcı adı deneyin." : /not allowed|disabled/i.test(m) ? "Kayıt şu an kapalı. Yöneticinizle iletişime geçin." : /password/i.test(m) ? "Parola kabul edilmedi: daha uzun ve karışık bir parola seçin." : errMsg(error);
+    return;
+  }
+  if (!data.session) { btn.disabled = false; btn.textContent = "Kayıt ol"; err.textContent = "Hesap oluşturuldu ama oturum açılamadı. Girişe dönüp deneyin."; return; }
+  S.user = data.user;
+  const { error: e2 } = await sb.rpc("request_join", { cname: cn, fname: fn });
+  S.joinErr = e2 ? errMsg(e2) : "";
+  await bootWith(data.user);
+}
+function gateView(user, req, msg) {
+  let body;
+  if (req && req.status === "pending") {
+    body = `<p style="text-align:center"><b>Başvurun alındı.</b></p><p class="mu" style="text-align:center">${esc(req.company)} şirketinin yöneticisi hesabını onayladığında giriş yapabileceksin. Onaydan sonra aşağıdaki Yenile düğmesine bas.</p><button onclick="bootWith(S.user)">Yenile</button>`;
+  } else {
+    body = `<p class="mu" style="text-align:center">${req && req.status === "rejected" ? "Başvurun reddedildi. Şirket adını kontrol edip tekrar başvurabilirsin." : "Hesabın henüz bir şirkete bağlı değil. Çalıştığın şirketin adını yazıp başvur."}</p>
+<input id="gc" placeholder="Şirket adı (tam ve doğru yaz)"><div class="err" id="e">${esc(msg || "")}</div><button onclick="run(gateApply)">Başvur</button>`;
+  }
+  $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Aero</span><b>DoX</b></div><div style="height:10px"></div>${body}<button class="sec" onclick="gateOut()">Çıkış</button></div>`);
+}
+async function gateApply() {
+  const fn = (S.user.user_metadata && S.user.user_metadata.full_name) || "", cn = val("gc").trim(); if (!cn) return gateView(S.user, null, "Şirket adını yazın.");
+  const { error } = await sb.rpc("request_join", { cname: cn, fname: fn || (S.user.email || "").split("@")[0] });
+  if (error) return gateView(S.user, null, errMsg(error));
+  await bootWith(S.user);
+}
+async function gateOut() { await sb.auth.signOut().catch(() => {}); S.user = null; loginView(); }
 async function doLogin() {
   const u = val("u").trim(), p = val("p");
   const err = document.getElementById("e"), btn = document.getElementById("lb");
@@ -146,7 +195,12 @@ async function boot(user) {
   S.user = user;
   const { data: pr, error: e1 } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
   if (e1) throw e1;
-  if (!pr) throw new Error("Hesabınız henüz bir şirkete bağlanmamış. Yöneticinizle iletişime geçin.");
+  if (!pr) {
+    const { data: rq } = await sb.rpc("my_join_request");
+    const m = S.joinErr; S.joinErr = "";
+    gateView(user, rq || null, m);
+    return;
+  }
   S.profile = pr; S.co = pr.company_id;
   const { data: co, error: e2 } = await sb.from("companies").select("*").eq("id", S.co).single();
   if (e2) throw e2;
@@ -211,6 +265,7 @@ function mAlerts() {
     if (i.h <= 10) o.push([i.h <= 0 ? "er" : "wa", b.r + ": 100 saatlik bakım " + (i.h <= 0 ? "gecikti (" + (-i.h) + " saat aşıldı)" : "için " + i.h + " saat kaldı")]);
     if (b.a && i.dl <= 10) o.push([i.dl < 0 ? "er" : "wa", b.r + ": yıllık bakım " + (i.dl < 0 ? (-i.dl) + " gün gecikti" : "için " + i.dl + " gün kaldı")]);
   });
+  if (isAdmin() && S.joins && S.joins.length) o.push(["wa", S.joins.length + " kişi şirkete katılmak için onayınızı bekliyor (Ayarlar > Katılım istekleri)"]);
   if (isAdmin()) o.push(...wAlerts());
   return o.length ? `<div style="margin-top:14px">${o.map(x => `<div class="card row" style="border-color:var(--${x[0]})"><span>🔔 ${esc(x[1])}</span><span class="badge ${x[0]}">${x[0] === "er" ? "Acil" : "Yaklaşıyor"}</span></div>`).join("")}</div>` : "";
 }
@@ -378,11 +433,26 @@ function plView() {
   const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
   return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select>${pAdd()}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}${grid(m, sids, rows)}</div>`;
 }
+function joinCard() {
+  const rows = (S.joins || []).map(j => `<div class="card" style="margin:8px 0"><b>${esc(j.full_name)}</b><div class="mu">Kullanıcı adı: ${esc(j.username || "")} · ${esc((j.created_at || "").slice(0, 10))}</div><select id="jb${j.id}"><option value="">Personel kaydı oluşturma</option>${ROLES.map(r => `<option>${r}</option>`).join("")}</select><button onclick="run(()=>approveJ('${j.id}'))">Onayla</button><button class="x" onclick="run(()=>rejectJ('${j.id}'))">Reddet</button></div>`).join("");
+  return `<div class="card"><b>📨 Katılım istekleri${S.joins && S.joins.length ? " (" + S.joins.length + ")" : ""}</b><div class="mu" style="margin:6px 0">Çalışanların kayıt olurken şirket adını tam olarak şöyle yazması gerekir: <b>${esc(S.company.name)}</b>. Onayladığın kişi normal kullanıcı olarak girer. Bir rol seçersen personel kaydı da açılır ve hesaba otomatik bağlanır.</div>${rows || '<p class="mu">Bekleyen istek yok.</p>'}</div>`;
+}
+async function approveJ(id) {
+  if (!isAdmin()) return;
+  const { error } = await sb.rpc("approve_join", { req: id, job: ROLE_TO_DB[val("jb" + id)] || null }); if (error) throw error;
+  await loadAll(); await loadAvatars().catch(() => {}); render(); toast("Kullanıcı onaylandı");
+}
+async function rejectJ(id) {
+  if (!isAdmin() || !confirm("Bu başvuru reddedilsin mi?")) return;
+  const { error } = await sb.rpc("reject_join", { req: id }); if (error) throw error;
+  S.joins = S.joins.filter(x => x.id !== id); render(); toast("Başvuru reddedildi");
+}
 function setView() {
   const adm = isAdmin();
   return `<div style="margin-top:14px"><div class="card"><b>📷 Profil fotoğrafım</b><div style="display:flex;align-items:center;gap:14px;margin:10px 0">${avatarBox(84)}<div class="mu">Panelde sadece senin hesabında görünür. Kare kırpılır ve küçültülür.</div></div><input id="av" type="file" accept="image/*"><button onclick="run(setAvatar)">Fotoğrafı yükle</button>${S.avatarUrl ? '<button class="sec" onclick="run(delAvatar)">Fotoğrafı kaldır</button>' : ""}</div>
 <div class="card"><b>🔑 Parolamı değiştir</b><div style="height:8px"></div>
 <input id="pw1" type="password" placeholder="Yeni parola (en az 8 karakter)" autocomplete="new-password"><input id="pw2" type="password" placeholder="Yeni parola (tekrar)" autocomplete="new-password"><button onclick="run(changePw)">Parolayı değiştir</button></div>
+${adm ? joinCard() : ""}
 ${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>
 <div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Kullanıcılar Supabase panelinden eklenir (Authentication > Users). Adımlar kurulum rehberinde ve 2. SQL dosyasının sonunda yazılı.</div></div>` : ""}
 <div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${adm ? "Yönetici" : "Kullanıcı"}</div></div></div>`;
