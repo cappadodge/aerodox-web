@@ -68,18 +68,27 @@ async function fetchAll(mk) { // Supabase tek istekte en fazla 1000 satır verir
 /* ---------- veri yükleme ---------- */
 async function loadAll() {
   const d = new Date(); d.setMonth(d.getMonth() - 24); const since = fd(d);
-  const [st, dc, bl, lg] = await Promise.all([
+  const [st, dc, bl, lg, pf] = await Promise.all([
     fetchAll(() => sb.from("staff").select("*").order("created_at")),
     fetchAll(() => sb.from("documents").select("*").order("created_at")),
     fetchAll(() => sb.from("balloons").select("*").order("created_at")),
     fetchAll(() => sb.from("duty_logs").select("*").gte("log_date", since).order("log_date")),
+    isAdmin() ? fetchAll(() => sb.from("profiles").select("*").order("full_name")) : Promise.resolve([]),
   ]);
-  S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false }));
+  S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null }));
+  S.profiles = pf;
   S.people = S.allStaff.filter(x => x.on);
   S.docs = dc.map(x => ({ id: x.id, k: x.scope === "company" ? "co" : "pe", sid: x.staff_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
   S.balloons = bl.map(mapB);
   S.logs = lg.map(x => ({ id: x.id, d: x.log_date, sid: x.staff_id, w: Number(x.duty_hours) || 0, f: Number(x.flight_hours) || 0, s: STATUS_FROM_DB[x.status] || "u" }));
   if (S.person >= S.people.length) S.person = 0;
+}
+async function loadAvatar() {
+  S.avatarUrl = "";
+  const p = S.profile && S.profile.avatar_path;
+  if (!p) return;
+  const { data } = await sb.storage.from(BUCKET).createSignedUrl(p, 86400);
+  if (data && data.signedUrl) S.avatarUrl = data.signedUrl;
 }
 async function loadLogo() {
   S.logoUrl = "";
@@ -137,6 +146,7 @@ async function boot(user) {
   S.company = co;
   await loadAll();
   await loadLogo();
+  await loadAvatar().catch(() => {});
   S.tab = "dash"; S.menu = 0; S.person = 0; S.month = fd(new Date()).slice(0, 7);
   render();
 }
@@ -144,7 +154,7 @@ async function logout() {
   if (FL.running() && !FL.armLogout()) { S.tab = "fl"; S.menu = 0; render(); return; }
   await FL.teardown();
   await sb.auth.signOut().catch(() => {});
-  S.user = S.profile = S.company = null; S.co = null; S.logoUrl = "";
+  S.user = S.profile = S.company = null; S.co = null; S.logoUrl = ""; S.avatarUrl = "";
   loginView();
 }
 async function initApp() {
@@ -198,6 +208,16 @@ function mAlerts() {
 }
 
 /* ---------- ekranlar ---------- */
+function avatarBox(sz) {
+  const ini = ((S.profile && S.profile.full_name) || (S.user && S.user.email) || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  return S.avatarUrl
+    ? `<img src="${esc(S.avatarUrl)}" alt="" style="width:${sz}px;height:${sz}px;border-radius:50%;object-fit:cover;flex:none">`
+    : `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:var(--pr);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(sz / 2.6)}px;flex:none">${esc(ini)}</div>`;
+}
+function profBox() {
+  const job = isAdmin() ? "Yönetici" : ((S.people[0] && S.people[0].r) || "Personel");
+  return `<div class="card" style="display:flex;align-items:center;gap:14px;margin-top:14px">${avatarBox(72)}<div style="min-width:0"><b style="font-size:17px">${esc(S.profile.full_name || S.user.email)}</b><div class="mu">${esc(job)}</div><button class="sec" style="width:auto;margin:8px 0 0;padding:6px 12px;font-size:13px" onclick="S.tab='ak';S.menu=0;render()">📷 Fotoğrafımı değiştir</button></div></div>`;
+}
 function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
@@ -223,22 +243,31 @@ function dashView() {
   const c = S.docs.filter(d => d.k === "co").length, p = S.docs.filter(d => d.k === "pe").length;
   const ex = S.docs.filter(d => st(d.d)[0] === "er" && d.d), so = S.docs.filter(d => st(d.d)[0] === "wa");
   const who = d => d.k === "co" ? "Şirket" : nm(d.sid);
-  return `${logoBox()}${mAlerts()}<div class="grid" style="margin-top:14px"><div class="card stat"><b>${c}</b><span class="mu">Şirket evrakı</span></div>
+  return `${profBox()}${logoBox()}${mAlerts()}<div class="grid" style="margin-top:14px"><div class="card stat"><b>${c}</b><span class="mu">Şirket evrakı</span></div>
   <div class="card stat"><b>${p}</b><span class="mu">Personel evrakı</span></div>
   <div class="card stat"><b style="color:var(--wa)">${so.length}</b><span class="mu">30 gün içinde dolacak</span></div>
   <div class="card stat"><b style="color:var(--er)">${ex.length}</b><span class="mu">Süresi dolmuş</span></div></div>
   <h2>Dikkat gerektirenler</h2>${[...ex, ...so].map(d => `<div class="card row"><div>${esc(d.t)}<div class="mu">${esc(who(d))} · ${esc(d.d)}</div></div><span class="badge ${st(d.d)[0]}">${st(d.d)[1]}</span></div>`).join("") || '<p class="mu">Şu an uyarı yok.</p>'}`;
 }
+function linkCard(person) {
+  if (!person) return "";
+  const linked = (S.profiles || []).find(x => x.id === person.u);
+  const used = new Set(S.allStaff.filter(x => x.u && x.id !== person.id).map(x => x.u));
+  const opts = (S.profiles || []).filter(x => !used.has(x.id)).map(x => `<option value="${x.id}" ${x.id === person.u ? "selected" : ""}>${esc(x.full_name || "(adsız)")}${x.role === "admin" ? " · yönetici" : ""}</option>`).join("");
+  return `<details class="card"><summary><b>🔗 Giriş hesabı</b> <span class="mu">${linked ? "· " + esc(linked.full_name) : "· bağlı değil"}</span></summary><div class="mu" style="margin:8px 0">Bu kişinin giriş hesabını seç. Bağlanan kullanıcı sadece bu kişinin evraklarını görür ve yükleyebilir.</div><select id="lk"><option value="">Bağlı değil</option>${opts}</select><button onclick="run(()=>linkP('${person.id}'))">Kaydet</button></details>`;
+}
 function docView() {
+  const adm = isAdmin();
   const k = S.tab, ty = k === "co" ? CT : PT;
   const person = S.people[S.person], sid = k === "pe" && person ? person.id : null;
   const list = S.docs.filter(d => d.k === k && (k === "co" || d.sid === sid));
-  return `<div style="margin-top:14px">${k === "pe" ? `<select onchange="S.person=+this.value;render()">${S.people.map((x, i) => `<option value="${i}" ${i === S.person ? "selected" : ""}>${esc(x.n)} (${esc(x.r)})</option>`).join("")}</select>` : ""}
-  ${k === "pe" ? pAdd(true) + chk(sid, person) : ""}<div class="card"><b>Evrak yükle</b><div style="height:8px"></div>
+  const canUp = k === "co" ? adm : !!person;
+  return `<div style="margin-top:14px">${k === "pe" && !person && !adm ? '<div class="card mu">Hesabınız henüz bir personel kaydına bağlanmamış. Lütfen yöneticinize başvurun.</div>' : ""}${k === "pe" && adm ? `<select onchange="S.person=+this.value;render()">${S.people.map((x, i) => `<option value="${i}" ${i === S.person ? "selected" : ""}>${esc(x.n)} (${esc(x.r)})</option>`).join("")}</select>` : ""}
+  ${k === "pe" ? (adm ? pAdd(true) + linkCard(person) : "") + chk(sid, person) : ""}${canUp ? `<div class="card"><b>Evrak yükle</b><div style="height:8px"></div>
   <select id="t">${ty.map(x => `<option>${esc(x)}</option>`).join("")}</select>
   <label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date">
   <input id="f" type="file" accept=".pdf,image/*">
-  <button onclick="run(()=>up('${k}'))">Yükle</button></div>
+  <button onclick="run(()=>up('${k}'))">Yükle</button></div>` : ""}
   <h2>Yüklenenler</h2>` + (list.map(d => `<div class="card"><div class="row"><b>${esc(d.t)}</b><span class="badge ${st(d.d)[0]}">${st(d.d)[1]}</span></div>
   <div class="mu">${esc(d.f)}${d.d ? " · Bitiş: " + esc(d.d) : ""}</div>
   <div class="row"><button class="sec" style="width:auto;margin:8px 0 0" onclick="run(()=>viewDoc('${d.id}'))">Görüntüle</button>${isAdmin() ? `<button class="x" onclick="run(()=>delDoc('${d.id}'))">🗑 Evrakı sil</button>` : ""}</div></div>`).join("") || '<p class="mu">Henüz evrak yok.</p>') + `</div>`;
@@ -336,7 +365,8 @@ function plView() {
 }
 function setView() {
   const adm = isAdmin();
-  return `<div style="margin-top:14px"><div class="card"><b>🔑 Parolamı değiştir</b><div style="height:8px"></div>
+  return `<div style="margin-top:14px"><div class="card"><b>📷 Profil fotoğrafım</b><div style="display:flex;align-items:center;gap:14px;margin:10px 0">${avatarBox(84)}<div class="mu">Panelde sadece senin hesabında görünür. Kare kırpılır ve küçültülür.</div></div><input id="av" type="file" accept="image/*"><button onclick="run(setAvatar)">Fotoğrafı yükle</button>${S.avatarUrl ? '<button class="sec" onclick="run(delAvatar)">Fotoğrafı kaldır</button>' : ""}</div>
+<div class="card"><b>🔑 Parolamı değiştir</b><div style="height:8px"></div>
 <input id="pw1" type="password" placeholder="Yeni parola (en az 8 karakter)" autocomplete="new-password"><input id="pw2" type="password" placeholder="Yeni parola (tekrar)" autocomplete="new-password"><button onclick="run(changePw)">Parolayı değiştir</button></div>
 ${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>
 <div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Kullanıcılar Supabase panelinden eklenir (Authentication > Users). Adımlar kurulum rehberinde ve 2. SQL dosyasının sonunda yazılı.</div></div>` : ""}
@@ -449,6 +479,40 @@ async function changePw() {
   if (a !== b) return alert("Parolalar aynı değil.");
   const { error } = await sb.auth.updateUser({ password: a }); if (error) throw error;
   render(); toast("Parola değiştirildi");
+}
+async function squareJpeg(file, size = 400) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("Görsel okunamadı. JPG veya PNG deneyin.")); i.src = url; });
+    const m = Math.min(img.width, img.height), c = document.createElement("canvas"); c.width = c.height = size;
+    c.getContext("2d").drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, size, size);
+    return await new Promise(res => c.toBlob(res, "image/jpeg", 0.85));
+  } finally { URL.revokeObjectURL(url); }
+}
+async function setAvatar() {
+  const f = fileOf("av"); if (!f) return alert("Bir fotoğraf seçin.");
+  if (f.size > 15e6) return alert("Fotoğraf çok büyük.");
+  const blob = await squareJpeg(f); if (!blob) throw new Error("Fotoğraf işlenemedi.");
+  const path = `${S.co}/avatars/${S.user.id}/${uuid()}.jpg`;
+  const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: "image/jpeg" }); if (error) throw error;
+  const { error: e2 } = await sb.rpc("set_my_avatar", { p: path });
+  if (e2) { sb.storage.from(BUCKET).remove([path]).catch(() => {}); throw e2; }
+  const old = S.profile.avatar_path; S.profile.avatar_path = path;
+  if (old) sb.storage.from(BUCKET).remove([old]).catch(() => {});
+  await loadAvatar(); render(); toast("Fotoğraf güncellendi");
+}
+async function delAvatar() {
+  const old = S.profile.avatar_path; if (!old) return;
+  const { error } = await sb.rpc("set_my_avatar", { p: null }); if (error) throw error;
+  S.profile.avatar_path = null; S.avatarUrl = "";
+  sb.storage.from(BUCKET).remove([old]).catch(() => {}); render(); toast("Fotoğraf kaldırıldı");
+}
+async function linkP(id) {
+  if (!isAdmin()) return;
+  const uid = val("lk") || null, x = S.allStaff.find(p => p.id === id); if (!x) return;
+  const { error } = await sb.from("staff").update({ user_id: uid }).eq("id", id);
+  if (error) throw new Error(/duplicate|unique/i.test(error.message || "") ? "Bu hesap başka bir personele bağlı." : error.message);
+  x.u = uid; render(); toast(uid ? "Hesap bağlandı" : "Bağlantı kaldırıldı");
 }
 async function setLogo() {
   if (!isAdmin()) return;
