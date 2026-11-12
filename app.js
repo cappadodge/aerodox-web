@@ -437,6 +437,29 @@ function joinCard() {
   const rows = (S.joins || []).map(j => `<div class="card" style="margin:8px 0"><b>${esc(j.full_name)}</b><div class="mu">Kullanıcı adı: ${esc(j.username || "")} · ${esc((j.created_at || "").slice(0, 10))}</div><select id="jb${j.id}"><option value="">Personel kaydı oluşturma</option>${ROLES.map(r => `<option>${r}</option>`).join("")}</select><button onclick="run(()=>approveJ('${j.id}'))">Onayla</button><button class="x" onclick="run(()=>rejectJ('${j.id}'))">Reddet</button></div>`).join("");
   return `<div class="card"><b>📨 Katılım istekleri${S.joins && S.joins.length ? " (" + S.joins.length + ")" : ""}</b><div class="mu" style="margin:6px 0">Çalışanların kayıt olurken şirket adını tam olarak şöyle yazması gerekir: <b>${esc(S.company.name)}</b>. Onayladığın kişi normal kullanıcı olarak girer. Bir rol seçersen personel kaydı da açılır ve hesaba otomatik bağlanır.</div>${rows || '<p class="mu">Bekleyen istek yok.</p>'}</div>`;
 }
+function usersCard() {
+  const me = S.user.id;
+  const rows = (S.profiles || []).map(u => {
+    const sf = S.allStaff.find(x => x.u === u.id), isA = u.role === "admin", self = u.id === me;
+    return `<div style="border-top:1px solid var(--bd);padding:10px 0"><div style="display:flex;align-items:center;gap:10px">${avatarBox(40, S.avatarMap && S.avatarMap[u.id], u.full_name)}<div style="min-width:0;flex:1"><b>${esc(u.full_name || "(adsız)")}${self ? " (sen)" : ""}</b><div class="mu">${sf ? esc(sf.r) + " · personel kaydı bağlı" : "personel kaydı bağlı değil"}</div></div><span class="badge ${isA ? "wa" : "ok"}">${isA ? "Yönetici" : "Kullanıcı"}</span></div>
+${self ? "" : `<div class="row" style="margin-top:8px;gap:8px"><button class="sec" style="margin:0" onclick="run(()=>setRole('${u.id}','${isA ? "staff" : "admin"}'))">${isA ? "Normal kullanıcı yap" : "Yönetici yap"}</button><button class="x" onclick="run(()=>removeU('${u.id}'))">Erişimi kaldır</button></div>`}</div>`;
+  }).join("");
+  return `<div class="card"><b>👥 Kullanıcılar (${(S.profiles || []).length})</b><div class="mu" style="margin:6px 0">Şirketine giriş yapabilen hesaplar. Yönetici yetkisi verebilir ya da erişimi kaldırabilirsin. Erişimi kaldırılan kişinin personel kaydı ve evrakları silinmez.</div>${rows || '<p class="mu">Kullanıcı yok.</p>'}</div>`;
+}
+async function setRole(id, role) {
+  if (!isAdmin()) return;
+  const u = S.profiles.find(x => x.id === id); if (!u) return;
+  if (!confirm((u.full_name || "Bu kullanıcı") + (role === "admin" ? " yönetici yapılsın mı? Tüm şirket verilerini görebilir ve değiştirebilir." : " normal kullanıcı yapılsın mı?"))) return;
+  const { error } = await sb.rpc("set_user_role", { uid: id, new_role: role }); if (error) throw error;
+  u.role = role; render(); toast("Rol güncellendi");
+}
+async function removeU(id) {
+  if (!isAdmin()) return;
+  const u = S.profiles.find(x => x.id === id); if (!u) return;
+  if (!confirm((u.full_name || "Bu kullanıcı") + " için şirkete erişim kaldırılsın mı? Giriş yapabilir ama hiçbir veriyi göremez.")) return;
+  const { error } = await sb.rpc("remove_user", { uid: id }); if (error) throw error;
+  await loadAll(); await loadAvatars().catch(() => {}); render(); toast("Erişim kaldırıldı");
+}
 async function approveJ(id) {
   if (!isAdmin()) return;
   const { error } = await sb.rpc("approve_join", { req: id, job: ROLE_TO_DB[val("jb" + id)] || null }); if (error) throw error;
@@ -452,7 +475,7 @@ function setView() {
   return `<div style="margin-top:14px"><div class="card"><b>📷 Profil fotoğrafım</b><div style="display:flex;align-items:center;gap:14px;margin:10px 0">${avatarBox(84)}<div class="mu">Panelde sadece senin hesabında görünür. Kare kırpılır ve küçültülür.</div></div><input id="av" type="file" accept="image/*"><button onclick="run(setAvatar)">Fotoğrafı yükle</button>${S.avatarUrl ? '<button class="sec" onclick="run(delAvatar)">Fotoğrafı kaldır</button>' : ""}</div>
 <div class="card"><b>🔑 Parolamı değiştir</b><div style="height:8px"></div>
 <input id="pw1" type="password" placeholder="Yeni parola (en az 8 karakter)" autocomplete="new-password"><input id="pw2" type="password" placeholder="Yeni parola (tekrar)" autocomplete="new-password"><button onclick="run(changePw)">Parolayı değiştir</button></div>
-${adm ? joinCard() : ""}
+${adm ? joinCard() + usersCard() : ""}
 ${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>
 <div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Kullanıcılar Supabase panelinden eklenir (Authentication > Users). Adımlar kurulum rehberinde ve 2. SQL dosyasının sonunda yazılı.</div></div>` : ""}
 <div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${adm ? "Yönetici" : "Kullanıcı"}</div></div></div>`;
