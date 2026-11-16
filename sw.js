@@ -1,7 +1,7 @@
 // Önce ağ, olmazsa önbellek: uygulama dosyaları güncellenince hemen yenisi gelir, çevrimdışıyken açılır.
 // Supabase ve harita karoları önbelleğe alınmaz (her zaman ağdan).
-const V = "aviadox-v4";
-const SHELL = ["./", "index.html", "styles.css", "config.js", "privacy.js", "app.js", "flightlog.js", "weather.js", "slot.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
+const V = "aviadox-v5";
+const SHELL = ["./", "index.html", "styles.css", "config.js", "privacy.js", "app.js", "flightlog.js", "weather.js", "slot.js", "i18n.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });

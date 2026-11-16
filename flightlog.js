@@ -263,7 +263,7 @@ function createMap(host,cb){
    if(f.heading!=null&&isFinite(f.heading)&&(f.speed||0)>0.5){c.save();c.translate(q[0],q[1]);c.rotate(rad(f.heading));c.beginPath();c.moveTo(0,-20);c.lineTo(6,-10);c.lineTo(-6,-10);c.closePath();c.fillStyle="#ffb000";c.fill();c.restore()}
    c.beginPath();c.arc(q[0],q[1],8,0,6.2832);c.fillStyle="#ffb000";c.fill();c.strokeStyle="#fff";c.lineWidth=3;c.stroke()}
   c.font="10px system-ui,sans-serif";c.textAlign="right";c.fillStyle="rgba(255,255,255,.75)";c.fillText("Esri, Maxar, Earthstar Geographics",V.w-6,V.h-5);c.textAlign="left";
-  if(tErr>=4&&tOk===0){c.fillStyle="rgba(11,17,24,.85)";c.fillRect(0,V.h/2-24,V.w,48);c.fillStyle="#ffb000";c.font="13px system-ui,sans-serif";c.textAlign="center";c.fillText("Uydu görüntüsü yüklenemedi (internet veya erişim izni)",V.w/2,V.h/2+4);c.textAlign="left"}}
+  if(tErr>=4&&tOk===0){c.fillStyle="rgba(11,17,24,.85)";c.fillRect(0,V.h/2-24,V.w,48);c.fillStyle="#ffb000";c.font="13px system-ui,sans-serif";c.textAlign="center";c.fillText(tx("Uydu görüntüsü yüklenemedi (internet veya erişim izni)"),V.w/2,V.h/2+4);c.textAlign="left"}}
  function hide(){pop.hidden=true}
  function show(it,sx,sy){if(!it){hide();return}pop.textContent="";const x=document.createElement("button");x.textContent="✕";x.setAttribute("aria-label","Kapat");x.onclick=hide;const b=document.createElement("b");b.textContent=it.name;pop.append(x,b);
   if(it.description){const d=document.createElement("div");d.style.whiteSpace="pre-wrap";d.textContent=it.description;pop.append(d)}pop.hidden=false;

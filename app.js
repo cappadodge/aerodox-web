@@ -23,7 +23,7 @@ const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evraklar
 
 /* ---------- yardımcılar ---------- */
 const isAdmin = () => !!(S.profile && S.profile.role === "admin");
-const $ = h => { document.getElementById("app").innerHTML = h; };
+const $ = h => { document.body.classList.remove("hasside"); document.getElementById("app").innerHTML = h; };
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const val = id => { const e = document.getElementById(id); return e ? e.value : ""; };
 const fileOf = id => { const e = document.getElementById(id); return e && e.files ? e.files[0] : null; };
@@ -113,7 +113,7 @@ function loginView(msg) {
 <p class="mu" style="text-align:center;margin:2px 0 24px">Balon operasyonları için evrak ve uçuş takibi</p>
 <input id="u" placeholder="Kullanıcı adı" autocapitalize="none" autocorrect="off" autocomplete="username" value="${esc(val("u"))}">
 <input id="p" type="password" placeholder="Parola" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button><button class="sec" onclick="signupView()">Hesabın yok mu? Kayıt ol</button><p style="text-align:center;margin-top:14px"><a href="#" onclick="privPage(loginView);return false">Gizlilik Politikası</a></p></div>`);
+<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button><button class="sec" onclick="signupView()">Hesabın yok mu? Kayıt ol</button><p style="text-align:center;margin-top:14px"><a href="#" onclick="privPage(loginView);return false">Gizlilik Politikası</a></p>${I18N.controls(true)}</div>`);
 }
 function privPage(back) {
   const f = typeof back === "function" ? back : null;
@@ -293,9 +293,15 @@ function profBox() {
 function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
-function nav() {
+function navBtns() {
   const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || isAdmin());
-  return `<div class="bd" onclick="S.menu=0;render()"></div><div class="dr"><b style="padding:0 12px 8px">Menü</b>${items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.pv=0;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("")}</div>`;
+  return items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.pv=0;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("");
+}
+function nav() {
+  return `<div class="bd" onclick="S.menu=0;render()"></div><div class="dr"><b style="padding:0 12px 8px">Menü</b>${navBtns()}</div>`;
+}
+function sideNav() {
+  return `<aside class="side"><div class="wm" style="font-size:28px;text-align:left;padding:4px 12px 14px;margin:0"><span>Avia</span><b>DoX</b></div>${navBtns()}<div style="flex:1"></div><button onclick="logout()">↩ Çıkış</button></aside>`;
 }
 function render() {
   if (!S.user || !S.company) return;
@@ -312,7 +318,8 @@ function render() {
   else if (S.tab === "sm") b = '<div id="smhost"></div>';
   else if (S.tab === "ak") b = setView();
   else b = docView();
-  $(`<div class="wrap">${head}${b}</div>${S.menu ? nav() : ""}`);
+  $(`${sideNav()}<div class="wrap">${head}${b}</div>${S.menu ? nav() : ""}`);
+  document.body.classList.add("hasside");
   if (S.tab === "sm") SLOT.mount(document.getElementById("smhost"));
   if (S.tab === "wx") WX.mount(document.getElementById("wxhost"));
   if (S.tab === "fl") FL.mount(document.getElementById("flhost"), S.co);
@@ -553,7 +560,7 @@ async function rejectJ(id) {
 }
 function setView() {
   const adm = isAdmin();
-  return `<div style="margin-top:14px"><div class="card"><b>📷 Profil fotoğrafım</b><div style="display:flex;align-items:center;gap:14px;margin:10px 0">${avatarBox(84)}<div class="mu">Panelde sadece senin hesabında görünür. Kare kırpılır ve küçültülür.</div></div><input id="av" type="file" accept="image/*"><button onclick="run(setAvatar)">Fotoğrafı yükle</button>${S.avatarUrl ? '<button class="sec" onclick="run(delAvatar)">Fotoğrafı kaldır</button>' : ""}</div>
+  return `<div style="margin-top:14px">${I18N.controls(false)}<div class="card"><b>📷 Profil fotoğrafım</b><div style="display:flex;align-items:center;gap:14px;margin:10px 0">${avatarBox(84)}<div class="mu">Panelde sadece senin hesabında görünür. Kare kırpılır ve küçültülür.</div></div><input id="av" type="file" accept="image/*"><button onclick="run(setAvatar)">Fotoğrafı yükle</button>${S.avatarUrl ? '<button class="sec" onclick="run(delAvatar)">Fotoğrafı kaldır</button>' : ""}</div>
 <div class="card"><b>🔑 Parolamı değiştir</b><div style="height:8px"></div>
 <input id="pw1" type="password" placeholder="Yeni parola (en az 8 karakter)" autocomplete="new-password"><input id="pw2" type="password" placeholder="Yeni parola (tekrar)" autocomplete="new-password"><button onclick="run(changePw)">Parolayı değiştir</button></div>
 ${adm ? joinCard() + usersCard() : ""}

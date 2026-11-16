@@ -74,3 +74,19 @@ nav button.on{color:var(--pr)}
 .toast{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);z-index:50;background:#0e1a2e;color:#fff;padding:12px 14px;border-radius:12px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:520px;margin:0 auto}
 .toast.bad{background:var(--er)}
 button:disabled{opacity:.6;cursor:wait}
+
+/* Geniş ekran (masaüstü/tablet yatay): kalıcı yan menü + geniş içerik */
+.side{display:none}
+@media (min-width:900px){
+  body.hasside{padding-left:240px}
+  body.hasside .side{display:flex;flex-direction:column;gap:4px;position:fixed;top:0;left:0;bottom:0;width:240px;background:var(--card);border-right:1px solid var(--bd);padding:calc(env(safe-area-inset-top,0px) + 16px) 12px 16px;overflow-y:auto;z-index:10}
+  .side button{background:none;color:var(--tx);border:0;text-align:left;margin:0;font-size:15px;padding:12px;border-radius:10px}
+  .side button:hover{background:var(--bg)}
+  .side button.on{color:var(--pr);background:var(--bg);font-weight:700}
+  body.hasside .wrap{max-width:1040px;padding:24px 28px 48px}
+  body.hasside .top .hb,body.hasside .bd,body.hasside .dr{display:none!important}
+  body.hasside .grid{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  body.hasside .fl{height:calc(100vh - 150px);min-height:620px}
+  .wrap.login{max-width:420px}
+}
+@media (min-width:1400px){body.hasside .wrap{max-width:1180px}}
