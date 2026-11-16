@@ -6,8 +6,8 @@ const AERODOX = {
   VAPID_PUBLIC: "BFFRlkJwpYTn2Qz-A3hJHBEVgvJl8cUf7NzkwXOEGCJmcZTZwODiz22wkKeSjE9bGdTZgny0ZKsmAHuluaRJoYs",
   AUTH_DOMAIN: "aerodox.app", // kullanıcı adı "ahmet" -> ahmet@aerodox.app (teknik alan adı, DEĞİŞTİRME)
   // Gizlilik politikasında görünen bilgiler: köşeli parantezli yerleri kendi bilgilerinle değiştir.
-  CONTROLLER: "[Veri sorumlusu adı / unvanı]",
-  CONTACT_EMAIL: "[iletişim e-postası]",
-  DATA_REGION: "[Supabase proje bölgesi, örn. Frankfurt]",
+  CONTROLLER: "Yandi ERAY",
+  CONTACT_EMAIL: "yandi.eray@gmail.com",
+  DATA_REGION: "İrlanda (AB)",
   POLICY_DATE: "16.11.2026",
 };
