@@ -16,7 +16,8 @@ const PRIV_DOC = {
       "Teknik veriler: altyapı sağlayıcıların günlüklerinde IP adresi ve cihaz/tarayıcı bilgisi; cihazınızda oturum bilgisi ve uçuş kayıtlarının yerel kopyası." ] },
     { h: "3. Konum verisi nasıl kullanılır?", p: [
       "Konum yalnızca Flight Log'da siz Start düğmesine bastığınızda ve Stop'a basana kadar alınır. Android uygulamasında, uçuş sırasında ekran kapalıyken de iz kaydedebilmek için arka planda konum kullanılır; bu sırada bildirim çubuğunda \"Uçuş kaydı sürüyor\" bildirimi görünür. Uçuş dışında konumunuz alınmaz ve takip edilmez.",
-      "Uçuş kayıtlarını yalnızca kaydı yapan kullanıcı görür. Başka kullanıcılar ve şirket yöneticisi kayıtlarınıza erişemez.",
+      "Kayıtlı uçuş izlerini (GPX) yalnızca kaydı yapan kullanıcı görür. Başka kullanıcılar ve şirket yöneticisi bu kayıtlara erişemez.",
+      "Uçuş kaydı açıkken anlık konumunuz, yüksekliğiniz, hızınız, yönünüz, adınız ve (girdiyseniz) balon çağrı kodunuz, yalnızca aynı şirketteki diğer kullanıcılara canlı olarak gösterilir. Bu paylaşım Stop'a bastığınızda veya haritadaki \"Ekiple paylaş\" kutusunu kapattığınızda sona erer; canlı konum sunucuda saklanmaz, yalnızca en son değer tutulur ve paylaşım bitince silinir.",
       "Konum izni cihazınızın ayarlarından istediğiniz zaman geri alınabilir. İzin vermezseniz uygulamanın diğer bölümleri çalışmaya devam eder, yalnızca uçuş kaydı alınamaz." ] },
     { h: "4. İşleme amaçları ve hukuki sebepler", ul: [
       "Hesabınızı oluşturmak, kimliğinizi doğrulamak ve hizmeti sunmak (sözleşmenin kurulması ve ifası).",
@@ -67,7 +68,8 @@ const PRIV_DOC_EN = {
       "Technical data: IP address and device/browser information in infrastructure providers' logs; session information and a local copy of flight records on your device." ] },
     { h: "3. How is location data used?", p: [
       "Location is captured only in Flight Log, from when you press Start until you press Stop. In the Android app, location is used in the background so the track can be recorded while the screen is off; a \"Flight recording in progress\" notification is shown in the notification bar. Outside a flight your location is not captured or tracked.",
-      "Flight records are visible only to the user who made them. Other users and the company admin cannot access your records.",
+      "Your saved flight tracks (GPX) are visible only to the user who recorded them. Other users and the company admin cannot access them.",
+      "While flight recording is on, your live position, altitude, speed, heading, name and (if entered) balloon call sign are shown live only to other users in the same company. Sharing ends when you press Stop or untick \"Share with team\" on the map; live position is not stored long-term: only the latest value is kept and it is deleted when sharing ends.",
       "You can revoke location permission at any time in your device settings. If you do not grant it, the rest of the app keeps working; only flight recording is unavailable." ] },
     { h: "4. Purposes and legal bases", ul: [
       "Creating your account, verifying your identity and providing the service (establishment and performance of a contract).",

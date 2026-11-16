@@ -181,21 +181,42 @@ function setSim(on){if(Q.status==="running"){note("Uçuş sürerken test konumu 
 /* ---------- oturum: Start / Stop ---------- */
 const elapsed=()=>Q.status==="running"?Q.now-Q.t0:Q.status==="stopped"?Q.t1-Q.t0:0;
 async function wakeOn(){try{if(navigator.wakeLock){Q.wake=await navigator.wakeLock.request("screen");Q.wake.addEventListener&&Q.wake.addEventListener("release",()=>{Q.wake=null;ui()})}}catch(e){Q.wake=null}ui()}
-const locKey=()=>"aviadox-locok-"+(typeof S!=="undefined"&&S.user?S.user.id:"x")+"-"+(typeof POLICY_VER==="function"?POLICY_VER():"1");
+const locKey=()=>"aviadox-locok2-"+(typeof S!=="undefined"&&S.user?S.user.id:"x")+"-"+(typeof POLICY_VER==="function"?POLICY_VER():"1");
 const locOk=()=>{try{return localStorage.getItem(locKey())==="1"}catch(e){return false}};
 function askLoc(){return new Promise(res=>{if(locOk())return res(true);
  const o=document.createElement("div");o.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px";
- o.innerHTML='<div class="card" style="max-width:420px;margin:0"><b>📍 Konum izni</b><p class="mu" style="margin:8px 0">Uçuş kaydı için konumunuz (enlem, boylam, yükseklik, hız) yalnızca <b>Start ile Stop arasında</b> alınır. Android uygulamasında ekran kapalıyken de kayıt sürer. Kayıtları yalnızca siz görürsünüz. İzni dilediğiniz zaman telefon ayarlarından geri alabilirsiniz.</p><label style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><input type="checkbox" id="lc" style="width:auto;margin:3px 0 0"><span>Uçuş kaydı için konumumun işlenmesine açık rıza veriyorum.</span></label><div style="display:flex;gap:8px;margin-top:12px"><button id="lok" disabled>Kabul ediyorum</button><button class="sec" id="lno">Vazgeç</button></div></div>';
+ o.innerHTML='<div class="card" style="max-width:420px;margin:0"><b>📍 Konum izni</b><p class="mu" style="margin:8px 0">Uçuş kaydı için konumunuz (enlem, boylam, yükseklik, hız) yalnızca <b>Start ile Stop arasında</b> alınır. Android uygulamasında ekran kapalıyken de kayıt sürer. Uçuş kaydı <b>açıkken</b> konumunuz haritada aynı şirketteki diğer kullanıcılara da canlı gösterilir (Stop ile paylaşım biter; kapatmak için haritadaki "Ekiple paylaş" kutusunu kaldırabilirsiniz). Kayıtlı uçuş izlerini yalnızca siz görürsünüz. İzni dilediğiniz zaman telefon ayarlarından geri alabilirsiniz.</p><label style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><input type="checkbox" id="lc" style="width:auto;margin:3px 0 0"><span>Uçuş kaydı için konumumun işlenmesine ve uçuş sırasında şirketimdeki kullanıcılarla canlı paylaşılmasına açık rıza veriyorum.</span></label><div style="display:flex;gap:8px;margin-top:12px"><button id="lok" disabled>Kabul ediyorum</button><button class="sec" id="lno">Vazgeç</button></div></div>';
  document.body.appendChild(o);const ck=o.querySelector("#lc"),ok=o.querySelector("#lok");ck.onchange=()=>{ok.disabled=!ck.checked};
  ok.onclick=()=>{try{localStorage.setItem(locKey(),"1")}catch(e){}try{sb.rpc("accept_privacy",{ver:typeof POLICY_VER==="function"?POLICY_VER():"1",loc:true}).then(()=>{},()=>{})}catch(e){}o.remove();res(true)};
  o.querySelector("#lno").onclick=()=>{o.remove();res(false)}})}
+/* ---------- canlı konum paylaşımı (aynı şirket, yalnızca kayıt açıkken) ---------- */
+const PEER_TTL=120000,PUB_MS=5000;
+const csKey=()=>"aviadox-call-"+(S.user?S.user.id:"x");
+function callOn(){try{return(localStorage.getItem(csKey())||"").trim()}catch(e){return""}}
+const peerName=p=>(p.callsign?p.callsign+" · ":"")+p.name;
+const shKey=()=>"aviadox-share-"+(S.user?S.user.id:"x");
+function shareOn(){try{return localStorage.getItem(shKey())!=="0"}catch(e){return true}}
+function peerList(){const n=Date.now();return Object.values(Q.peers||{}).filter(p=>p.user_id!==(S.user&&S.user.id)&&n-p.t<PEER_TTL)}
+function peerRow(r){return{callsign:r.callsign||"",user_id:r.user_id,name:r.name||"?",lat:r.lat,lon:r.lon,alt:r.alt,speed:r.speed,heading:r.heading,t:new Date(r.updated_at).getTime()}}
+function peersUi(){const el=Q.root&&Q.root.querySelector(".fl-peers");if(!el)return;const l=peerList();el.textContent=l.length?"👥 Haritada: "+l.map(p=>peerName(p)+(p.alt!=null?" ("+Math.round(p.alt)+" m)":"")).join(", "):""}
+async function peersStart(){if(Q.peerCh||!Q.co)return;Q.peers={};
+ try{const{data}=await sb.from("live_pos").select("*").gte("updated_at",new Date(Date.now()-PEER_TTL).toISOString());(data||[]).forEach(r=>{Q.peers[r.user_id]=peerRow(r)})}catch(e){}
+ try{Q.peerCh=sb.channel("livepos-"+Q.co).on("postgres_changes",{event:"*",schema:"public",table:"live_pos",filter:"company_id=eq."+Q.co},pl=>{
+  if(pl.eventType==="DELETE"){const o=pl.old&&pl.old.user_id;if(o)delete Q.peers[o]}else if(pl.new&&pl.new.user_id)Q.peers[pl.new.user_id]=peerRow(pl.new);
+  if(Q.map)Q.map.redraw();peersUi()}).subscribe()}catch(e){}
+ clearInterval(Q.peerT);Q.peerT=setInterval(()=>{if(Q.map)Q.map.redraw();peersUi()},15000);if(Q.map)Q.map.redraw();peersUi()}
+function peersStop(){clearInterval(Q.peerT);Q.peerT=null;if(Q.peerCh){try{sb.removeChannel(Q.peerCh)}catch(e){}Q.peerCh=null}Q.peers={}}
+async function pubPos(){if(!Q.share||Q.sim||Q.status!=="running"||!Q.cur||!navigator.onLine)return;const p=Q.cur;
+ try{await sb.from("live_pos").upsert({user_id:S.user.id,company_id:S.co,name:pilotName(),lat:p.lat,lon:p.lon,alt:p.ele==null?null:p.ele,speed:p.gs==null?null:p.gs,heading:p.course==null?null:p.course,callsign:callOn()||null,updated_at:new Date().toISOString()})}catch(e){}}
+async function pubClear(){try{await sb.from("live_pos").delete().eq("user_id",S.user.id)}catch(e){}}
 function start(){if(Q.status==="running")return;if(!Q.sim&&!locOk()){askLoc().then(ok=>{if(ok){startGeo();note("Konum başlatılıyor. Konum gelince Start'a tekrar bas.")}});return}if(!Q.fix){note("Henüz konum alınamadı. Konum iznini verin ve GPS sinyalini bekleyin.");return}
  Q.pts=[];Q.cur=null;Q.prevP=null;Q.last=null;Q.pendingGap=false;Q.gapMsg="";Q.gapSec=0;Q.hidAt=0;Q.draft=null;Q.draftT=0;Q.t0=Date.now();Q.now=Q.t0;Q.status="running";Q.follow=true;Q.fenceKey="";checkFence();wakeOn();restartGeo(true);
- Q.timer=setInterval(tick,1000);if(Q.map){Q.map.center(Q.fix.lat,Q.fix.lon);Q.map.redraw()}ui()}
+ Q.share=shareOn();Q.pubT=0;Q.timer=setInterval(tick,1000);if(Q.map){Q.map.center(Q.fix.lat,Q.fix.lon);Q.map.redraw()}ui()}
 function tick(){const now=Date.now(),raw=Q.raw;Q.now=now;const lastP=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(raw&&now-raw.timestamp<=FIX_MAX_AGE&&!(lastP&&now-lastP.ts<900)){const p=makePoint({coords:raw.coords,timestamp:now},Q.pts.length?Q.pts[Q.pts.length-1]:null);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p}
  if(!Q.sim&&Q.pts.length>1&&now-Q.draftT>=15000){Q.draftT=now;dbPut("meta",{key:"draft",t0:Q.t0,pts:Q.pts,sim:Q.sim})}
+ if(Q.share&&!Q.sim&&now-(Q.pubT||0)>=PUB_MS){Q.pubT=now;pubPos()}
  if(Q.map)Q.map.redraw();ui()}
-async function stop(){if(Q.status!=="running")return;clearInterval(Q.timer);try{if(Q.wake)await Q.wake.release()}catch(e){}Q.wake=null;Q.t1=Date.now();Q.status="stopped";Q.follow=false;restartGeo(false);
+async function stop(){if(Q.status!=="running")return;clearInterval(Q.timer);try{if(Q.wake)await Q.wake.release()}catch(e){}Q.wake=null;Q.t1=Date.now();Q.status="stopped";Q.follow=false;restartGeo(false);pubClear();
  const pts=Q.pts;await dbDel("meta","draft");if(pts.length<2){note("Uçuş çok kısa: kaydedilecek yeterli veri yok (en az 2 nokta).");ui();return}
  await finalize(pts,Q.t0,Q.t1,Q.sim)}
 async function finalize(pts,t0,t1,sim){
@@ -265,13 +286,17 @@ function createMap(host,cb){
   c.font="12px system-ui,sans-serif";
   for(const p of Qs.kml.points){const q=P(p.pos);c.beginPath();c.arc(q[0],q[1],6,0,6.2832);c.fillStyle="rgba(240,140,0,.9)";c.fill();c.strokeStyle="#fff";c.lineWidth=2;c.stroke();if(V.z>=12){c.lineWidth=3;c.strokeStyle="rgba(0,0,0,.7)";c.strokeText(p.name,q[0]+9,q[1]+4);c.fillStyle="#fff";c.fillText(p.name,q[0]+9,q[1]+4)}}
   if(Qs.pts.length>1){c.beginPath();Qs.pts.forEach((p,i)=>{const q=P([p.lat,p.lon]);i&&!p.gapBefore?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1])});c.strokeStyle="#ffb000";c.lineWidth=4;c.stroke()}
+  {const now=Date.now();for(const p of Qs.peers?Object.values(Qs.peers):[]){if(Qs.sim===undefined||p.user_id===(S.user&&S.user.id)||now-p.t>PEER_TTL)continue;const q=P([p.lat,p.lon]);
+   if(p.heading!=null&&isFinite(p.heading)&&(p.speed||0)>0.5){c.save();c.translate(q[0],q[1]);c.rotate(rad(p.heading));c.beginPath();c.moveTo(0,-18);c.lineTo(5,-9);c.lineTo(-5,-9);c.closePath();c.fillStyle="#4dabf7";c.fill();c.restore()}
+   c.beginPath();c.arc(q[0],q[1],7,0,6.2832);c.fillStyle="#4dabf7";c.fill();c.strokeStyle="#fff";c.lineWidth=2.5;c.stroke();
+   const lb=peerName(p)+(p.alt!=null?" · "+Math.round(p.alt)+" m":"")+(now-p.t>30000?" ·"+Math.round((now-p.t)/1000)+"sn":"");c.font="12px system-ui,sans-serif";c.lineWidth=3;c.strokeStyle="rgba(0,0,0,.75)";c.strokeText(lb,q[0]+10,q[1]+4);c.fillStyle="#fff";c.fillText(lb,q[0]+10,q[1]+4)}}
   const f=Qs.fix;if(f){const q=P([f.lat,f.lon]),mpp=156543.03392*Math.cos(rad(f.lat))/2**V.z,ar=(f.acc||0)/mpp;
    if(ar>14){c.beginPath();c.arc(q[0],q[1],ar,0,6.2832);c.fillStyle="rgba(255,176,0,.12)";c.fill()}
    c.beginPath();c.arc(q[0],q[1],14,0,6.2832);c.fillStyle="rgba(255,176,0,.35)";c.fill();
    if(f.heading!=null&&isFinite(f.heading)&&(f.speed||0)>0.5){c.save();c.translate(q[0],q[1]);c.rotate(rad(f.heading));c.beginPath();c.moveTo(0,-20);c.lineTo(6,-10);c.lineTo(-6,-10);c.closePath();c.fillStyle="#ffb000";c.fill();c.restore()}
    c.beginPath();c.arc(q[0],q[1],8,0,6.2832);c.fillStyle="#ffb000";c.fill();c.strokeStyle="#fff";c.lineWidth=3;c.stroke()}
   c.font="10px system-ui,sans-serif";c.textAlign="right";c.fillStyle="rgba(255,255,255,.75)";c.fillText("Esri, Maxar, Earthstar Geographics",V.w-6,V.h-5);c.textAlign="left";
-  if(tErr>=4&&tOk===0){c.fillStyle="rgba(11,17,24,.85)";c.fillRect(0,V.h/2-24,V.w,48);c.fillStyle="#ffb000";c.font="13px system-ui,sans-serif";c.textAlign="center";c.fillText(tx("Uydu görüntüsü yüklenemedi (internet veya erişim izni)"),V.w/2,V.h/2+4);c.textAlign="left"}}
+  if(tErr>=4&&tOk===0){c.fillStyle="rgba(11,17,24,.85)";c.fillRect(0,V.h/2-24,V.w,48);c.fillStyle="#ffb000";c.font="13px system-ui,sans-serif";c.textAlign="center";c.fillText(I18N.tx("Uydu görüntüsü yüklenemedi (internet veya erişim izni)"),V.w/2,V.h/2+4);c.textAlign="left"}}
  function hide(){pop.hidden=true}
  function show(it,sx,sy){if(!it){hide();return}pop.textContent="";const x=document.createElement("button");x.textContent="✕";x.setAttribute("aria-label","Kapat");x.onclick=hide;const b=document.createElement("b");b.textContent=it.name;pop.append(x,b);
   if(it.description){const d=document.createElement("div");d.style.whiteSpace="pre-wrap";d.textContent=it.description;pop.append(d)}pop.hidden=false;
@@ -305,11 +330,12 @@ function build(){const r=document.createElement("div");r.className="fl";
  <div class="fl-alerts"></div>
  <div class="fl-mapwrap"><button class="fl-rc" data-act="rc" hidden>Merkeze al</button><div class="fl-zoom"><button data-act="zi" aria-label="Yakınlaştır">+</button><button data-act="zo" aria-label="Uzaklaştır">−</button></div></div>
  <div class="fl-pos mu"></div>
+ <div class="fl-peers mu"></div>
  <div class="fl-telem"><div><b class="t-alt">–</b><span>Yükseklik m</span></div><div><b class="t-gs">–</b><span>Yer hızı km/sa</span></div><div><b class="t-vs">–</b><span>Dikey hız m/s</span></div><div><b class="t-wd">–</b><span>Rüzgar yön° / km/sa</span></div></div>
- <div class="fl-kml"><label class="fl-file" ${isAdmin()?"":"hidden"}>📍 NOTAM KML yükle<input type="file" class="fl-kfile" accept=".kml,.xml,application/vnd.google-earth.kml+xml,application/xml,text/xml"></label><span class="fl-kinfo mu"></span><button class="ghost" data-act="kfit" hidden>KML'ye git</button><button class="ghost" data-act="kclr" hidden>Temizle</button><label class="fl-simlbl"><input type="checkbox" class="fl-sim"> Test konumu (simülasyon)</label></div>
+ <div class="fl-kml"><label class="fl-file" ${isAdmin()?"":"hidden"}>📍 NOTAM KML yükle<input type="file" class="fl-kfile" accept=".kml,.xml,application/vnd.google-earth.kml+xml,application/xml,text/xml"></label><span class="fl-kinfo mu"></span><button class="ghost" data-act="kfit" hidden>KML'ye git</button><button class="ghost" data-act="kclr" hidden>Temizle</button><label class="fl-simlbl">Balon çağrı kodu <input type="text" class="fl-cs" maxlength="12" placeholder="TC-BXX" autocapitalize="characters" style="width:110px;display:inline-block"></label><label class="fl-simlbl"><input type="checkbox" class="fl-shr"> Ekiple paylaş</label><label class="fl-simlbl"><input type="checkbox" class="fl-sim"> Test konumu (simülasyon)</label></div>
 </div>
 <div class="fl-pane fl-p-log" hidden><div class="fl-list"></div></div>`;
- Q.root=r;Q.map=createMap(r.querySelector(".fl-mapwrap"),{state:()=>Q,onBreak:()=>{Q.follow=false;ui()}});
+ Q.root=r;Q.share=shareOn();r.querySelector(".fl-shr").checked=Q.share;r.querySelector(".fl-cs").value=callOn();Q.map=createMap(r.querySelector(".fl-mapwrap"),{state:()=>Q,onBreak:()=>{Q.follow=false;ui()}});
  r.addEventListener("input",e=>{const t=e.target&&e.target.dataset&&e.target.dataset.trim;if(!t)return;if(t==="h")Q.trimH=e.target.value;else Q.trimT=e.target.value;if(Q.trimSure){Q.trimSure=false;const b=r.querySelector('[data-act="trimgo"]');if(b)b.textContent="Kırp ve kaydet"}trimPreview()});
  r.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b||!r.contains(b))return;const a=b.dataset.act,id=b.dataset.id,rec=Q.flights.find(x=>x.id===id)||(Q.last&&Q.last.id===id?Q.last:null);
   if(a==="sub"){Q.sub=b.dataset.v;showSub()}else if(a==="go"){Q.status==="running"?stop():start()}
@@ -317,7 +343,7 @@ function build(){const r=document.createElement("div");r.className="fl";
   else if(a==="kfit"){if(Q.kml.polygons.length+Q.kml.lines.length+Q.kml.points.length){Q.follow=false;Q.map.fit(kmlBounds(Q.kml));ui()}}else if(a==="kclr")clearKml();
   else if(a==="share"&&rec)share(rec);else if(a==="dl"&&rec)saveGpx(rec);else if(a==="dismiss"){Q.last=null;ui()}else if(a==="draftsave")draftSave();else if(a==="draftdel")draftDel();else if(a==="trim"&&rec)openTrim(rec);else if(a==="trimx"){Q.trimId=null;Q.trimSure=false;renderLog()}else if(a==="trimgo"&&rec)trimGo(rec)
   else if(a==="del"&&rec){if(Q.confirmId===id){clearTimeout(Q.confirmT);Q.confirmId=null;delFlight(rec).then(refreshFlights,e=>note("Silinemedi: "+errMsg(e)))}else{Q.confirmId=id;clearTimeout(Q.confirmT);Q.confirmT=setTimeout(()=>{Q.confirmId=null;renderLog()},4000);renderLog()}}});
- r.addEventListener("change",e=>{if(e.target.matches(".fl-sim"))setSim(e.target.checked);else if(e.target.matches(".fl-kfile"))loadKml(e.target)})}
+ r.addEventListener("change",e=>{if(e.target.matches(".fl-cs")){const v=e.target.value.trim().toUpperCase().slice(0,12);e.target.value=v;try{localStorage.setItem(csKey(),v)}catch(x){}if(Q.status==="running"){Q.pubT=0;pubPos()}return}if(e.target.matches(".fl-shr")){Q.share=e.target.checked;try{localStorage.setItem(shKey(),Q.share?"1":"0")}catch(x){}if(Q.share){Q.pubT=0;if(Q.status==="running")pubPos()}else pubClear()}else if(e.target.matches(".fl-sim"))setSim(e.target.checked);else if(e.target.matches(".fl-kfile"))loadKml(e.target)})}
 function showSub(){if(!Q.root)return;Q.root.querySelector(".fl-p-map").hidden=Q.sub!=="map";Q.root.querySelector(".fl-p-log").hidden=Q.sub!=="log";Q.root.querySelectorAll(".fl-tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===Q.sub));if(Q.sub==="log")renderLog();else if(Q.map)Q.map.resize()}
 function ui(){const r=Q.root;if(!r||!r.isConnected)return;const T=(s,v)=>{const el=r.querySelector(s);if(el&&el.textContent!==v)el.textContent=v};const run=Q.status==="running",c=Q.cur,f=(v,d)=>v==null||!isFinite(v)?"–":v.toFixed(d||0);
  T(".fl-timer",fmtDur(elapsed()));const go=r.querySelector(".fl-go");go.textContent=run?"Stop":"Start";go.classList.toggle("stop",run);
@@ -350,8 +376,8 @@ function init(co){Q.co=co;dbp=null;mem.flights.clear();mem.meta.clear();Q.persis
  loadKmlRemote().catch(()=>{});checkDraft().catch(()=>{});
  Q.purgeT=setInterval(refreshFlights,6*36e5);Q.visH=()=>{if(document.visibilityState==="hidden"){if(Q.status==="running"&&!BG)Q.hidAt=Date.now();return}
   refreshFlights();if(Q.status==="running"){if(!Q.wake)wakeOn();if(Q.hidAt&&!BG){const g=Date.now()-Q.hidAt;Q.hidAt=0;if(g>5000){Q.pendingGap=true;Q.gapSec+=g/1000;Q.gapMsg="Uçuş sırasında uygulama toplam "+fmtDur(Q.gapSec*1000)+" arka planda kaldı; bu sürelerde konum kaydedilmedi (GPX'te iz kopuk görünür). Ekranı açık tut.";ui()}}}};document.addEventListener("visibilitychange",Q.visH);refreshFlights()}
-function mount(host,co){if(!host)return;if(Q.co&&Q.co!==co)reset();if(!Q.co)init(co);if(!Q.root)build();host.appendChild(Q.root);if(locOk())startGeo();else if(!Q.locAsked){Q.locAsked=true;askLoc().then(ok=>{if(ok)startGeo()})}showSub();ui();requestAnimationFrame(()=>{if(Q.map)Q.map.resize()})}
-function reset(){stopGeo();stopSim();clearInterval(Q.timer);clearInterval(Q.purgeT);clearTimeout(Q.noteT);clearTimeout(Q.confirmT);if(Q.visH)document.removeEventListener("visibilitychange",Q.visH);if(Q.map)Q.map.destroy();if(Q.root)Q.root.remove();dbp=null;Object.assign(Q,fresh())}
+function mount(host,co){if(!host)return;if(Q.co&&Q.co!==co)reset();if(!Q.co)init(co);if(!Q.root)build();host.appendChild(Q.root);peersStart();if(locOk())startGeo();else if(!Q.locAsked){Q.locAsked=true;askLoc().then(ok=>{if(ok)startGeo()})}showSub();ui();requestAnimationFrame(()=>{if(Q.map)Q.map.resize()})}
+function reset(){peersStop();if(Q.status==="running")pubClear();stopGeo();stopSim();clearInterval(Q.timer);clearInterval(Q.purgeT);clearTimeout(Q.noteT);clearTimeout(Q.confirmT);if(Q.visH)document.removeEventListener("visibilitychange",Q.visH);if(Q.map)Q.map.destroy();if(Q.root)Q.root.remove();dbp=null;Object.assign(Q,fresh())}
 function teardown(){if(!Q.co)return Promise.resolve();if(Q.status==="running")return stop().then(reset,reset);reset();return Promise.resolve()}
 function armLogout(){if(Q.logoutArm)return true;Q.logoutArm=true;setTimeout(()=>{Q.logoutArm=false},8000);note("Uçuş kaydı sürüyor. Çıkış yaparsan uçuş durdurulup kaydedilir. Çıkmak için Çıkış'a tekrar bas.",8000);return false}
 return{mount,teardown,running:()=>Q.status==="running",armLogout}
