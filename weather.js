@@ -1,6 +1,16 @@
-// AviaDoX Hava Durumu + kendi airgramımız. Veri: Open-Meteo (açık, anahtarsız). Kapadokya/Göreme.
+// AviaDoX Hava Durumu + kendi airgramımız. Veri: Open-Meteo (açık, anahtarsız). Kapadokya bölgeleri.
 const WX = (() => {
-  const LAT = 38.643, LON = 34.828, TTL = 10 * 60 * 1000, KEY = "aviadox-wx-v1";
+  const REGIONS = [
+    { id: "goreme", name: "Göreme", lat: 38.643, lon: 34.828 },
+    { id: "uchisar", name: "Uçhisar", lat: 38.629, lon: 34.806 },
+    { id: "urgup", name: "Ürgüp", lat: 38.631, lon: 34.912 },
+    { id: "avanos", name: "Avanos", lat: 38.715, lon: 34.846 },
+    { id: "zelve", name: "Zelve / Çavuşin", lat: 38.674, lon: 34.850 }
+  ];
+  const TTL = 10 * 60 * 1000, RKEY = "aviadox-wx-region";
+  let reg = REGIONS[0];
+  try { reg = REGIONS.find(r => r.id === localStorage.getItem(RKEY)) || REGIONS[0]; } catch (e) {}
+  const KEY = () => "aviadox-wx-v2-" + reg.id;
   const LV = [["700", "700 hPa"], ["850", "850 hPa"], ["925", "925 hPa"], ["180m", "180 m"], ["120m", "120 m"], ["80m", "80 m"], ["10m", "10 m"]];
   const DAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
   let host = null, timer = null, data = null, err = "", loading = false;
@@ -9,18 +19,20 @@ const WX = (() => {
     const h = ["temperature_2m", "dew_point_2m", "cloud_cover", "precipitation", "visibility", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m"];
     for (const m of [80, 120, 180]) h.push(`wind_speed_${m}m`, `wind_direction_${m}m`);
     for (const p of [925, 850, 700]) h.push(`wind_speed_${p}hPa`, `wind_direction_${p}hPa`, `geopotential_height_${p}hPa`);
-    return `https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&hourly=${h.join(",")}&wind_speed_unit=kn&timezone=Europe%2FIstanbul&forecast_days=3&models=best_match`;
+    return `https://api.open-meteo.com/v1/forecast?latitude=${reg.lat}&longitude=${reg.lon}&hourly=${h.join(",")}&wind_speed_unit=kn&timezone=Europe%2FIstanbul&forecast_days=3&models=best_match`;
   }
   async function load(force) {
-    try { const c = JSON.parse(localStorage.getItem(KEY) || "null"); if (c && !force && Date.now() - c.t < TTL) { data = c; err = ""; paint(); return; } if (c && !data) { data = c; paint(); } } catch (e) {}
+    try { const c = JSON.parse(localStorage.getItem(KEY()) || "null"); if (c && !force && Date.now() - c.t < TTL) { data = c; err = ""; paint(); return; } if (c && !data) { data = c; paint(); } } catch (e) {}
     loading = true; paint();
+    const my = reg;
     try {
       const r = await fetch(url(), { cache: "no-store" });
       if (!r.ok) throw new Error("HTTP " + r.status);
       const j = await r.json();
+      if (my !== reg) return;
       data = { t: Date.now(), h: j.hourly }; err = "";
-      try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) {}
-    } catch (e) { err = data ? "Güncellenemedi, eski veri gösteriliyor." : "Hava verisi alınamadı. İnternet bağlantını kontrol et."; }
+      try { localStorage.setItem(KEY(), JSON.stringify(data)); } catch (e) {}
+    } catch (e) { if (my !== reg) return; err = data ? "Güncellenemedi, eski veri gösteriliyor." : "Hava verisi alınamadı. İnternet bağlantını kontrol et."; }
     loading = false; paint();
   }
   function col(k) { return k < 8 ? "#2e9e5b" : k < 12 ? "#9acd32" : k < 16 ? "#f2c230" : k < 22 ? "#f08a24" : "#d63a3a"; }
@@ -72,7 +84,7 @@ const WX = (() => {
   function dirTxt(d) { return ["K", "KKD", "KD", "DKD", "D", "DGD", "GD", "GGD", "G", "GGB", "GB", "BGB", "B", "BKB", "KB", "KKB"][Math.round(d / 22.5) % 16] || ""; }
   function paint() {
     if (!host || !host.isConnected) { stop(); return; }
-    let b = `<div class="card" style="display:flex;align-items:center;gap:10px"><div style="flex:1"><b>Kapadokya (Göreme)</b><div class="mu">${data ? "Güncelleme: " + new Date(data.t).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) + " · otomatik yenilenir" : "Yükleniyor…"}</div></div><button class="sec" style="width:auto;margin:0" onclick="WX.refresh()">${loading ? "…" : "↻ Yenile"}</button></div>`;
+    let b = `<div class="tabs" style="display:flex;gap:6px;overflow-x:auto;margin-bottom:10px">${REGIONS.map(r => `<button class="${r.id === reg.id ? "" : "sec"}" style="width:auto;margin:0;white-space:nowrap;padding:8px 14px" onclick="WX.region('${r.id}')">${r.name}</button>`).join("")}</div><div class="card" style="display:flex;align-items:center;gap:10px"><div style="flex:1"><b>Kapadokya (${reg.name})</b><div class="mu">${data ? "Güncelleme: " + new Date(data.t).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) + " · otomatik yenilenir" : "Yükleniyor…"}</div></div><button class="sec" style="width:auto;margin:0" onclick="WX.refresh()">${loading ? "…" : "↻ Yenile"}</button></div>`;
     if (err) b += `<p class="mu" style="color:var(--er)">${esc(err)}</p>`;
     if (data) {
       const h = data.h, nowIso = new Date().toLocaleString("sv-SE", { timeZone: "Europe/Istanbul" }).slice(0, 13).replace(" ", "T");
@@ -89,6 +101,7 @@ const WX = (() => {
   return {
     mount(el) { host = el; stop(); paint(); load(false); timer = setInterval(() => load(true), TTL); },
     refresh() { load(true); },
+    region(id) { const r = REGIONS.find(x => x.id === id); if (!r || r === reg) return; reg = r; try { localStorage.setItem(RKEY, id); } catch (e) {} data = null; err = ""; load(false); },
     slotChanged() { if (host && host.isConnected) paint(); }
   };
 })();
