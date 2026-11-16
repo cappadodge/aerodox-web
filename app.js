@@ -130,6 +130,16 @@ function privPage(back) {
   const f = typeof back === "function" ? back : null;
   $(`<div class="wrap" style="padding-bottom:40px"><button class="sec" style="width:auto" onclick="${f ? "(" + f.name + ")()" : "render()"}">‹ Geri</button><div style="margin-top:8px">${privHtml()}</div></div>`);
 }
+async function loadCompanyList() {
+  try {
+    const { data, error } = await sb.rpc("signup_companies");
+    if (error || !data || !data.length) return;
+    const el = document.getElementById("sc"); if (!el || el.tagName === "SELECT") return;
+    const cur = el.value, sel = document.createElement("select"); sel.id = "sc";
+    sel.innerHTML = `<option value="">Şirketini seç</option>` + data.map(n => `<option value="${esc(n)}"${n === cur ? " selected" : ""}>${esc(n)}</option>`).join("");
+    el.replaceWith(sel);
+  } catch (e) {}
+}
 function signupView(msg) {
   $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Avia</span><b>DoX</b></div>
 <p class="mu" style="text-align:center;margin:2px 0 18px">Kayıt ol. Hesabın, çalıştığın şirketin yöneticisi onaylayınca açılır.</p>
@@ -139,6 +149,7 @@ function signupView(msg) {
 <input id="sp1" type="password" placeholder="Parola (en az 8 karakter)" autocomplete="new-password">
 <input id="sp2" type="password" placeholder="Parola (tekrar)" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSignup()">
 <label style="display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14px"><input id="sk" type="checkbox" style="width:auto;margin:3px 0 0"><span><a href="#" onclick="privPage(signupView);return false">Gizlilik Politikası ve KVKK Aydınlatma Metni</a>'ni okudum, kabul ediyorum.</span></label><div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doSignup()">Kayıt ol</button><button class="sec" onclick="loginView()">‹ Girişe dön</button></div>`);
+  loadCompanyList();
 }
 async function doSignup() {
   const fn = val("sn").trim().replace(/\s+/g, " "), cn = val("sc").trim().replace(/\s+/g, " "), un = val("su").trim().toLowerCase(), p1 = val("sp1"), p2 = val("sp2");
@@ -535,7 +546,7 @@ function plView() {
 }
 function joinCard() {
   const rows = (S.joins || []).map(j => `<div class="card" style="margin:8px 0"><b>${esc(j.full_name)}</b><div class="mu">Kullanıcı adı: ${esc(j.username || "")} · ${esc((j.created_at || "").slice(0, 10))}</div><select id="jb${j.id}"><option value="">Personel kaydı oluşturma</option>${ROLES.map(r => `<option>${r}</option>`).join("")}</select><button onclick="run(()=>approveJ('${j.id}'))">Onayla</button><button class="x" onclick="run(()=>rejectJ('${j.id}'))">Reddet</button></div>`).join("");
-  return `<div class="card"><b>📨 Katılım istekleri${S.joins && S.joins.length ? " (" + S.joins.length + ")" : ""}</b><div class="mu" style="margin:6px 0">Çalışanların kayıt olurken şirket adını tam olarak şöyle yazması gerekir: <b>${esc(S.company.name)}</b>. Onayladığın kişi normal kullanıcı olarak girer. Bir rol seçersen personel kaydı da açılır ve hesaba otomatik bağlanır.</div>${rows || '<p class="mu">Bekleyen istek yok.</p>'}</div>`;
+  return `<div class="card"><b>📨 Katılım istekleri${S.joins && S.joins.length ? " (" + S.joins.length + ")" : ""}</b><div class="mu" style="margin:6px 0">Çalışanlar kayıt olurken listeden şirketi seçer: <b>${esc(S.company.name)}</b>. Onayladığın kişi normal kullanıcı olarak girer. Bir rol seçersen personel kaydı da açılır ve hesaba otomatik bağlanır.</div>${rows || '<p class="mu">Bekleyen istek yok.</p>'}</div>`;
 }
 function usersCard() {
   const me = S.user.id;
@@ -578,7 +589,7 @@ function setView() {
 <input id="pw1" type="password" placeholder="Yeni parola (en az 8 karakter)" autocomplete="new-password"><input id="pw2" type="password" placeholder="Yeni parola (tekrar)" autocomplete="new-password"><button onclick="run(changePw)">Parolayı değiştir</button></div>
 ${um ? joinCard() + usersCard() : ""}
 ${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>` : ""}
-${um ? `<div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Çalışanlar giriş ekranında Kayıt ol'a basıp şirket adını yazarak başvurur. Yukarıdaki Katılım istekleri bölümünden onaylarsın.</div></div>` : ""}
+${um ? `<div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Çalışanlar giriş ekranında Kayıt ol'a basıp listeden şirketi seçerek başvurur. Yukarıdaki Katılım istekleri bölümünden onaylarsın.</div></div>` : ""}
 <div class="card"><b>🔒 Gizlilik</b><div class="mu" style="margin:6px 0">Hangi verileri neden işlediğimizi ve haklarını okuyabilirsin.</div><button class="sec" onclick="privPage(render)">Gizlilik Politikası</button></div>
 <div class="card"><b>🗑 Hesabımı sil</b><div class="mu" style="margin:6px 0">Giriş hesabın, profilin, fotoğrafın ve uçuş kayıtların kalıcı olarak silinir. Geri alınamaz. Personel kaydın ve evraklar işletmeye aittir, yöneticin siler. Şirketin tek yöneticisiysen önce başka birini yönetici yap.</div><input id="dx" placeholder="Onay için SİL yaz" autocapitalize="characters"><button class="x" onclick="run(deleteAccount)">Hesabımı kalıcı olarak sil</button></div>
 <div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${esc(ROLE_NAMES[myRole()] || "Kullanıcı")}</div></div></div>`;
