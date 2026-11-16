@@ -215,7 +215,7 @@ async function boot(user) {
   await loadLogo();
   await loadAvatar().catch(() => {});
   if (isAdmin()) await loadAvatars().catch(() => {});
-  S.tab = "dash"; S.menu = 0; S.person = 0; S.month = fd(new Date()).slice(0, 7);
+  S.tab = "dash"; S.menu = 0; S.person = 0; S.pv = 0; S.month = fd(new Date()).slice(0, 7);
   render();
 }
 async function logout() {
@@ -295,7 +295,7 @@ function logoBox() {
 }
 function nav() {
   const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || isAdmin());
-  return `<div class="bd" onclick="S.menu=0;render()"></div><div class="dr"><b style="padding:0 12px 8px">Menü</b>${items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("")}</div>`;
+  return `<div class="bd" onclick="S.menu=0;render()"></div><div class="dr"><b style="padding:0 12px 8px">Menü</b>${items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.pv=0;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("")}</div>`;
 }
 function render() {
   if (!S.user || !S.company) return;
@@ -359,20 +359,40 @@ ${adm ? `<details class="card"><summary><b>➕ Bu kategoriye evrak yükle</b></s
 }
 function docView() {
   if (S.tab === "co") return coView();
+  if (S.tab === "pe") return peView();
+  return coView();
+}
+function pBadge(p) {
+  const ds = S.docs.filter(d => d.k === "pe" && d.sid === p.id);
+  const miss = PT.filter(t => !ds.some(d => d.t === t)).length;
+  const bad = ds.some(d => d.d && st(d.d)[0] === "er"), soon = ds.some(d => d.d && st(d.d)[0] === "wa");
+  return bad ? '<span class="badge er">Süresi dolmuş</span>' : soon ? '<span class="badge wa">Yakında dolacak</span>' : miss ? `<span class="badge er">${miss} eksik</span>` : '<span class="badge ok">Tamam</span>';
+}
+function peView() {
   const adm = isAdmin();
-  const k = S.tab, ty = k === "co" ? CT : PT;
-  const person = S.people[S.person], sid = k === "pe" && person ? person.id : null;
-  const list = S.docs.filter(d => d.k === k && (k === "co" || d.sid === sid));
-  const canUp = k === "co" ? adm : !!person;
-  return `<div style="margin-top:14px">${k === "pe" && !person && !adm ? '<div class="card mu">Hesabınız henüz bir personel kaydına bağlanmamış. Lütfen yöneticinize başvurun.</div>' : ""}${k === "pe" && adm ? `<select onchange="S.person=+this.value;render()">${S.people.map((x, i) => `<option value="${i}" ${i === S.person ? "selected" : ""}>${esc(x.n)} (${esc(x.r)})</option>`).join("")}</select>` : ""}
-  ${k === "pe" ? (adm ? pAdd(true) + personHead(person) + linkCard(person) : "") + chk(sid, person) : ""}${canUp ? `<div class="card"><b>Evrak yükle</b><div style="height:8px"></div>
-  <select id="t">${ty.map(x => `<option>${esc(x)}</option>`).join("")}</select>
-  <label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date">
-  <input id="f" type="file" accept=".pdf,image/*">
-  <button onclick="run(()=>up('${k}'))">Yükle</button></div>` : ""}
-  <h2>Yüklenenler</h2>` + (list.map(d => `<div class="card"><div class="row"><b>${esc(d.t)}</b><span class="badge ${st(d.d)[0]}">${st(d.d)[1]}</span></div>
-  <div class="mu">${esc(d.f)}${d.d ? " · Bitiş: " + esc(d.d) : ""}</div>
-  <div class="row"><button class="sec" style="width:auto;margin:8px 0 0" onclick="run(()=>viewDoc('${d.id}'))">Görüntüle</button>${isAdmin() ? `<button class="x" onclick="run(()=>delDoc('${d.id}'))">🗑 Evrakı sil</button>` : ""}</div></div>`).join("") || '<p class="mu">Henüz evrak yok.</p>') + `</div>`;
+  if (!adm) return S.people[0] ? peDetail(S.people[0], false) : '<div class="card mu" style="margin-top:14px">Hesabınız henüz bir personel kaydına bağlanmamış. Lütfen yöneticinize başvurun.</div>';
+  const person = S.people[S.person];
+  if (S.pv && person) return peDetail(person, true);
+  return `<div style="margin-top:14px">${S.people.map((x, i) => `<button class="sec" style="text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="S.person=${i};S.pv=1;S.pt=null;render()"><span><b>${esc(x.n)}</b><br><span class="mu">${esc(x.r)}</span></span>${pBadge(x)}</button>`).join("") || '<p class="mu">Henüz personel yok.</p>'}${pAdd(false)}</div>`;
+}
+function peDetail(person, adm) {
+  const sid = person.id;
+  if (!PT.includes(S.pt)) S.pt = PT[0];
+  const of = t => S.docs.filter(d => d.k === "pe" && d.sid === sid && d.t === t);
+  const chips = PT.map((t, i) => {
+    const n = of(t).length, bad = of(t).some(d => d.d && st(d.d)[0] === "er");
+    return `<button class="${t === S.pt ? "" : "sec"}" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="S.pt=PT[${i}];render()">${esc(t)}${n ? " · " + n : " · eksik"}${bad ? " ⚠" : ""}</button>`;
+  }).join("");
+  const list = of(S.pt);
+  return `<div style="margin-top:14px">${adm ? `<button class="sec" style="width:auto;margin:0 0 12px" onclick="S.pv=0;render()">‹ Personel listesi</button>` : ""}${personHead(person)}
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${chips}</div>
+<h2>${esc(S.pt)}</h2>
+${list.map(d => `<div class="card"><div class="row"><b>${esc(d.f || d.t)}</b><span class="badge ${st(d.d)[0]}">${st(d.d)[1]}</span></div>
+<div class="mu">${d.d ? "Bitiş: " + esc(d.d) : "Bitiş tarihi yok"}</div>
+<div class="row"><button class="sec" style="width:auto;margin:8px 0 0" onclick="run(()=>viewDoc('${d.id}'))">Görüntüle</button>${adm ? `<button class="x" onclick="run(()=>delDoc('${d.id}'))">🗑 Evrakı sil</button>` : ""}</div></div>`).join("") || '<p class="mu">Bu kategoride evrak yok.</p>'}
+<details class="card"><summary><b>➕ Bu kategoriye evrak yükle</b></summary><div style="height:8px"></div><input id="t" type="hidden" value="${esc(S.pt)}">
+<label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date"><input id="f" type="file" accept=".pdf,image/*"><button onclick="run(()=>up('pe'))">Yükle</button></details>
+${adm ? linkCard(person) + `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Bu personeli çıkar</button>` : ""}</div>`;
 }
 function chk(sid, person) {
   if (!person) return "";
@@ -583,7 +603,7 @@ async function addP() {
   const { data, error } = await sb.from("staff").insert({ company_id: S.co, full_name: n, job_title: ROLE_TO_DB[val("pr")] || "other" }).select().single();
   if (error) throw error;
   const x = { id: data.id, n: data.full_name, r: ROLE_FROM_DB[data.job_title] || "Diğer", on: true };
-  S.allStaff.push(x); S.people.push(x); S.person = S.people.length - 1; render(); toast("Eklendi");
+  S.allStaff.push(x); S.people.push(x); S.person = S.people.length - 1; S.pv = 1; S.pt = null; render(); toast("Eklendi");
 }
 async function delP() {
   if (!isAdmin() || !S.people.length) return;
@@ -591,7 +611,7 @@ async function delP() {
   if (!confirm(x.n + " listeden çıkarılsın mı? Geçmiş çizelge kayıtları ve yüklenmiş evrakları saklanır.")) return;
   const { error } = await sb.from("staff").update({ active: false }).eq("id", x.id);
   if (error) throw error;
-  x.on = false; S.people = S.people.filter(p => p.on); S.person = 0; render(); toast("Personel listeden çıkarıldı");
+  x.on = false; S.people = S.people.filter(p => p.on); S.person = 0; S.pv = 0; render(); toast("Personel listeden çıkarıldı");
 }
 async function addB() {
   if (!isAdmin()) return;
