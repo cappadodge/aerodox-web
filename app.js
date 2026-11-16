@@ -27,6 +27,7 @@ const isAdmin = () => !!(S.profile && S.profile.role === "admin");
 const ROLE_NAMES = { admin: "Veriden sorumlu yönetici", flight_mgr: "Uçuş işletme yöneticisi", ground_mgr: "Yer işletme yöneticisi", quality_mgr: "Kalite yöneticisi", staff: "Kullanıcı" };
 const myRole = () => (S.profile && S.profile.role) || "staff";
 const isMgr = () => myRole() !== "staff";
+const canManageUsers = () => ["admin", "quality_mgr"].includes(myRole());
 const canEditMaint = () => ["admin", "ground_mgr"].includes(myRole());
 const canEditSched = () => ["admin", "flight_mgr", "quality_mgr"].includes(myRole());
 const canEditCo = () => ["admin", "quality_mgr"].includes(myRole());
@@ -83,9 +84,9 @@ async function loadAll() {
     fetchAll(() => sb.from("documents").select("*").order("created_at")),
     fetchAll(() => sb.from("balloons").select("*").order("created_at")),
     fetchAll(() => sb.from("duty_logs").select("*").gte("log_date", since).order("log_date")),
-    isAdmin() ? fetchAll(() => sb.from("profiles").select("*").order("full_name")) : Promise.resolve([]),
+    canManageUsers() ? fetchAll(() => sb.from("profiles").select("*").order("full_name")) : Promise.resolve([]),
     fetchAll(() => sb.from("maintenance_logs").select("*").order("done_on", { ascending: false })).catch(() => []),
-    isAdmin() ? fetchAll(() => sb.from("join_requests").select("*").eq("status", "pending").order("created_at")).catch(() => []) : Promise.resolve([]),
+    canManageUsers() ? fetchAll(() => sb.from("join_requests").select("*").eq("status", "pending").order("created_at")).catch(() => []) : Promise.resolve([]),
   ]);
   S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null }));
   S.profiles = pf; S.joins = jr; S.mlogs = ml.map(mapM);
@@ -224,7 +225,7 @@ async function boot(user) {
   await loadAll();
   await loadLogo();
   await loadAvatar().catch(() => {});
-  if (isAdmin()) await loadAvatars().catch(() => {});
+  if (canManageUsers()) await loadAvatars().catch(() => {});
   S.tab = "dash"; S.menu = 0; S.person = 0; S.pv = 0; S.month = fd(new Date()).slice(0, 7);
   render();
 }
@@ -283,7 +284,7 @@ function mAlerts() {
     if (i.h <= 10) o.push([i.h <= 0 ? "er" : "wa", b.r + ": 100 saatlik bakım " + (i.h <= 0 ? "gecikti (" + (-i.h) + " saat aşıldı)" : "için " + i.h + " saat kaldı")]);
     if (b.a && i.dl <= 10) o.push([i.dl < 0 ? "er" : "wa", b.r + ": yıllık bakım " + (i.dl < 0 ? (-i.dl) + " gün gecikti" : "için " + i.dl + " gün kaldı")]);
   });
-  if (isAdmin() && S.joins && S.joins.length) o.push(["wa", S.joins.length + " kişi şirkete katılmak için onayınızı bekliyor (Ayarlar > Katılım istekleri)"]);
+  if (canManageUsers() && S.joins && S.joins.length) o.push(["wa", S.joins.length + " kişi şirkete katılmak için onayınızı bekliyor (Ayarlar > Katılım istekleri)"]);
   if (canEditSched()) o.push(...wAlerts());
   return o.length ? `<div style="margin-top:14px">${o.map(x => `<div class="card row" style="border-color:var(--${x[0]})"><span>🔔 ${esc(x[1])}</span><span class="badge ${x[0]}">${x[0] === "er" ? "Acil" : "Yaklaşıyor"}</span></div>`).join("")}</div>` : "";
 }
@@ -409,7 +410,7 @@ ${list.map(d => `<div class="card"><div class="row"><b>${esc(d.f || d.t)}</b><sp
 <div class="row"><button class="sec" style="width:auto;margin:8px 0 0" onclick="run(()=>viewDoc('${d.id}'))">Görüntüle</button>${canEditPDoc(person) ? `<button class="x" onclick="run(()=>delDoc('${d.id}'))">🗑 Evrakı sil</button>` : ""}</div></div>`).join("") || '<p class="mu">Bu kategoride evrak yok.</p>'}
 ${canEditPDoc(person) || person.u === S.user.id ? `<details class="card"><summary><b>➕ Bu kategoriye evrak yükle</b></summary><div style="height:8px"></div><input id="t" type="hidden" value="${esc(S.pt)}">
 <label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date"><input id="f" type="file" accept=".pdf,image/*"><button onclick="run(()=>up('pe'))">Yükle</button></details>` : ""}
-${isAdmin() ? linkCard(person) : ""}${adm && canEditStaffRec(person) ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Bu personeli çıkar</button>` : ""}</div>`;
+${canManageUsers() ? linkCard(person) : ""}${adm && canEditStaffRec(person) ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Bu personeli çıkar</button>` : ""}</div>`;
 }
 function chk(sid, person) {
   if (!person) return "";
@@ -541,12 +542,12 @@ function usersCard() {
   const rows = (S.profiles || []).map(u => {
     const sf = S.allStaff.find(x => x.u === u.id), isA = u.role === "admin", self = u.id === me;
     return `<div style="border-top:1px solid var(--bd);padding:10px 0"><div style="display:flex;align-items:center;gap:10px">${avatarBox(40, S.avatarMap && S.avatarMap[u.id], u.full_name)}<div style="min-width:0;flex:1"><b>${esc(u.full_name || "(adsız)")}${self ? " (sen)" : ""}</b><div class="mu">${sf ? esc(sf.r) + " · personel kaydı bağlı" : "personel kaydı bağlı değil"}</div></div><span class="badge ${u.role === "staff" ? "ok" : "wa"}">${esc(ROLE_NAMES[u.role] || "Kullanıcı")}</span></div>
-${self ? "" : `<div class="row" style="margin-top:8px;gap:8px"><select style="margin:0" onchange="run(()=>setRole('${u.id}',this.value))">${Object.keys(ROLE_NAMES).map(k => `<option value="${k}"${k === u.role ? " selected" : ""}>${ROLE_NAMES[k]}</option>`).join("")}</select><button class="x" onclick="run(()=>removeU('${u.id}'))">Erişimi kaldır</button></div>`}</div>`;
+${self || (u.role === "admin" && !isAdmin()) ? "" : `<div class="row" style="margin-top:8px;gap:8px"><select style="margin:0" onchange="run(()=>setRole('${u.id}',this.value))">${Object.keys(ROLE_NAMES).filter(k => k !== "admin" || isAdmin()).map(k => `<option value="${k}"${k === u.role ? " selected" : ""}>${ROLE_NAMES[k]}</option>`).join("")}</select><button class="x" onclick="run(()=>removeU('${u.id}'))">Erişimi kaldır</button></div>`}</div>`;
   }).join("");
   return `<div class="card"><b>👥 Kullanıcılar (${(S.profiles || []).length})</b><div class="mu" style="margin:6px 0">Şirketine giriş yapabilen hesaplar. Rol atayabilir ya da erişimi kaldırabilirsin. Erişimi kaldırılan kişinin personel kaydı ve evrakları silinmez.</div>${rows || '<p class="mu">Kullanıcı yok.</p>'}</div>`;
 }
 async function setRole(id, role) {
-  if (!isAdmin()) return;
+  if (!canManageUsers()) return;
   const u = S.profiles.find(x => x.id === id); if (!u) return;
   if (u.role === role) return;
   if (!confirm((u.full_name || "Bu kullanıcı") + " için rol \"" + ROLE_NAMES[role] + "\" yapılsın mı?")) { render(); return; }
@@ -554,30 +555,30 @@ async function setRole(id, role) {
   u.role = role; render(); toast("Rol güncellendi");
 }
 async function removeU(id) {
-  if (!isAdmin()) return;
+  if (!canManageUsers()) return;
   const u = S.profiles.find(x => x.id === id); if (!u) return;
   if (!confirm((u.full_name || "Bu kullanıcı") + " için şirkete erişim kaldırılsın mı? Giriş yapabilir ama hiçbir veriyi göremez.")) return;
   const { error } = await sb.rpc("remove_user", { uid: id }); if (error) throw error;
   await loadAll(); await loadAvatars().catch(() => {}); render(); toast("Erişim kaldırıldı");
 }
 async function approveJ(id) {
-  if (!isAdmin()) return;
+  if (!canManageUsers()) return;
   const { error } = await sb.rpc("approve_join", { req: id, job: ROLE_TO_DB[val("jb" + id)] || null }); if (error) throw error;
   await loadAll(); await loadAvatars().catch(() => {}); render(); toast("Kullanıcı onaylandı");
 }
 async function rejectJ(id) {
-  if (!isAdmin() || !confirm("Bu başvuru reddedilsin mi?")) return;
+  if (!canManageUsers() || !confirm("Bu başvuru reddedilsin mi?")) return;
   const { error } = await sb.rpc("reject_join", { req: id }); if (error) throw error;
   S.joins = S.joins.filter(x => x.id !== id); render(); toast("Başvuru reddedildi");
 }
 function setView() {
-  const adm = isAdmin();
+  const adm = isAdmin(), um = canManageUsers();
   return `<div style="margin-top:14px">${I18N.controls(false)}<div class="card"><b>📷 Profil fotoğrafım</b><div style="display:flex;align-items:center;gap:14px;margin:10px 0">${avatarBox(84)}<div class="mu">Panelde sadece senin hesabında görünür. Kare kırpılır ve küçültülür.</div></div><input id="av" type="file" accept="image/*"><button onclick="run(setAvatar)">Fotoğrafı yükle</button>${S.avatarUrl ? '<button class="sec" onclick="run(delAvatar)">Fotoğrafı kaldır</button>' : ""}</div>
 <div class="card"><b>🔑 Parolamı değiştir</b><div style="height:8px"></div>
 <input id="pw1" type="password" placeholder="Yeni parola (en az 8 karakter)" autocomplete="new-password"><input id="pw2" type="password" placeholder="Yeni parola (tekrar)" autocomplete="new-password"><button onclick="run(changePw)">Parolayı değiştir</button></div>
-${adm ? joinCard() + usersCard() : ""}
-${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>
-<div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Çalışanlar giriş ekranında Kayıt ol'a basıp şirket adını yazarak başvurur. Yukarıdaki Katılım istekleri bölümünden onaylarsın.</div></div>` : ""}
+${um ? joinCard() + usersCard() : ""}
+${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>` : ""}
+${um ? `<div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Çalışanlar giriş ekranında Kayıt ol'a basıp şirket adını yazarak başvurur. Yukarıdaki Katılım istekleri bölümünden onaylarsın.</div></div>` : ""}
 <div class="card"><b>🔒 Gizlilik</b><div class="mu" style="margin:6px 0">Hangi verileri neden işlediğimizi ve haklarını okuyabilirsin.</div><button class="sec" onclick="privPage(render)">Gizlilik Politikası</button></div>
 <div class="card"><b>🗑 Hesabımı sil</b><div class="mu" style="margin:6px 0">Giriş hesabın, profilin, fotoğrafın ve uçuş kayıtların kalıcı olarak silinir. Geri alınamaz. Personel kaydın ve evraklar işletmeye aittir, yöneticin siler. Şirketin tek yöneticisiysen önce başka birini yönetici yap.</div><input id="dx" placeholder="Onay için SİL yaz" autocapitalize="characters"><button class="x" onclick="run(deleteAccount)">Hesabımı kalıcı olarak sil</button></div>
 <div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${esc(ROLE_NAMES[myRole()] || "Kullanıcı")}</div></div></div>`;
@@ -762,7 +763,7 @@ async function delAvatar() {
   sb.storage.from(BUCKET).remove([old]).catch(() => {}); render(); toast("Fotoğraf kaldırıldı");
 }
 async function linkP(id) {
-  if (!isAdmin()) return;
+  if (!canManageUsers()) return;
   const uid = val("lk") || null, x = S.allStaff.find(p => p.id === id); if (!x) return;
   const { error } = await sb.from("staff").update({ user_id: uid }).eq("id", id);
   if (error) throw new Error(/duplicate|unique/i.test(error.message || "") ? "Bu hesap başka bir personele bağlı." : error.message);
