@@ -1,4 +1,4 @@
-/* ===== AeroDoX: uygulama (Supabase'e bağlı) ===== */
+/* ===== AviaDoX: uygulama (Supabase'e bağlı) ===== */
 const sb = supabase.createClient(AERODOX.SUPABASE_URL, AERODOX.SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
 });
@@ -31,7 +31,7 @@ const uuid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xx
 const extOf = n => ((String(n).split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8)) || "bin";
 const nm = sid => (S.allStaff.find(x => x.id === sid) || { n: "(silinmiş)" }).n;
 const BAL = z => `<svg width="${z}" height="${Math.round(z * 1.2)}" viewBox="0 0 100 120" style="display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg"><defs><clipPath id="bc${z}"><path d="M50 4C22 4 8 26 8 46c0 20 14 34 28 44h28c14-10 28-24 28-44C92 26 78 4 50 4z"/></clipPath></defs><g clip-path="url(#bc${z})">${[0, 1, 2, 3, 4, 5, 6].map(i => `<rect x="${8 + i * 12.15}" y="0" width="12.2" height="100" fill="${["#e03131", "#fff", "#f59f00"][i % 3]}"/>`).join("")}</g><path d="M50 4C22 4 8 26 8 46c0 20 14 34 28 44h28c14-10 28-24 28-44C92 26 78 4 50 4z" fill="none" stroke="#7a2e0e" stroke-width="2"/><path d="M36 90l5 12M64 90l-5 12M50 90v12" stroke="#7a2e0e" stroke-width="1.5"/><ellipse cx="50" cy="95" rx="3" ry="5" fill="#ffd43b"/><rect x="39" y="102" width="22" height="14" rx="2" fill="#a0652a" stroke="#6b3f17"/><path d="M39 109h22M45 102v14M55 102v14" stroke="#6b3f17" stroke-width="1"/></svg>`;
-const AERO = z => `<svg width="${z}" height="${Math.round(z * 7 / 6)}" viewBox="0 0 120 140" style="display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AeroDoX"><path d="M60 6C28 6 10 30 10 54c0 22 16 38 32 50h36c16-12 32-28 32-50C110 30 92 6 60 6z" style="fill:var(--pr)"/><path d="M60 6C46 22 40 40 42 104M60 6c14 16 20 34 18 98" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="2"/><path d="M39 34l42 50" stroke="#8ec5ff" stroke-width="9" stroke-linecap="round"/><path d="M81 34L39 84" stroke="#fff" stroke-width="9" stroke-linecap="round"/><path d="M44 104l6 12M76 104l-6 12" style="stroke:var(--pr)" stroke-width="2.5" stroke-linecap="round"/><path d="M45 119a3 3 0 0 1 3-3h18l9 9v8a3 3 0 0 1-3 3H48a3 3 0 0 1-3-3z" fill="#fff" style="stroke:var(--pr)" stroke-width="3" stroke-linejoin="round"/><path d="M66 116v9h9" fill="none" style="stroke:var(--pr)" stroke-width="2.5" stroke-linejoin="round"/><path d="M51 128h18M51 133h10" stroke="#8ec5ff" stroke-width="2.5" stroke-linecap="round"/></svg>`;
+const AERO = z => `<svg width="${z}" height="${Math.round(z * 7 / 6)}" viewBox="0 0 120 140" style="display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AviaDoX"><path d="M60 6C28 6 10 30 10 54c0 22 16 38 32 50h36c16-12 32-28 32-50C110 30 92 6 60 6z" style="fill:var(--pr)"/><path d="M60 6C46 22 40 40 42 104M60 6c14 16 20 34 18 98" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="2"/><path d="M39 34l42 50" stroke="#8ec5ff" stroke-width="9" stroke-linecap="round"/><path d="M81 34L39 84" stroke="#fff" stroke-width="9" stroke-linecap="round"/><path d="M44 104l6 12M76 104l-6 12" style="stroke:var(--pr)" stroke-width="2.5" stroke-linecap="round"/><path d="M45 119a3 3 0 0 1 3-3h18l9 9v8a3 3 0 0 1-3 3H48a3 3 0 0 1-3-3z" fill="#fff" style="stroke:var(--pr)" stroke-width="3" stroke-linejoin="round"/><path d="M66 116v9h9" fill="none" style="stroke:var(--pr)" stroke-width="2.5" stroke-linejoin="round"/><path d="M51 128h18M51 133h10" stroke="#8ec5ff" stroke-width="2.5" stroke-linecap="round"/></svg>`;
 
 function errMsg(e) {
   const m = String((e && (e.message || e.error_description)) || e || "Bilinmeyen hata");
@@ -109,26 +109,31 @@ async function loadLogo() {
 
 /* ---------- giriş / çıkış ---------- */
 function loginView(msg) {
-  $(`<div class="wrap login"><div class="logo">${AERO(104)}</div><div class="wm"><span>Aero</span><b>DoX</b></div>
+  $(`<div class="wrap login"><div class="logo">${AERO(104)}</div><div class="wm"><span>Avia</span><b>DoX</b></div>
 <p class="mu" style="text-align:center;margin:2px 0 24px">Balon operasyonları için evrak ve uçuş takibi</p>
 <input id="u" placeholder="Kullanıcı adı" autocapitalize="none" autocorrect="off" autocomplete="username" value="${esc(val("u"))}">
 <input id="p" type="password" placeholder="Parola" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button><button class="sec" onclick="signupView()">Hesabın yok mu? Kayıt ol</button></div>`);
+<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button><button class="sec" onclick="signupView()">Hesabın yok mu? Kayıt ol</button><p style="text-align:center;margin-top:14px"><a href="#" onclick="privPage(loginView);return false">Gizlilik Politikası</a></p></div>`);
+}
+function privPage(back) {
+  const f = typeof back === "function" ? back : null;
+  $(`<div class="wrap" style="padding-bottom:40px"><button class="sec" style="width:auto" onclick="${f ? "(" + f.name + ")()" : "render()"}">‹ Geri</button><div style="margin-top:8px">${privHtml()}</div></div>`);
 }
 function signupView(msg) {
-  $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Aero</span><b>DoX</b></div>
+  $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Avia</span><b>DoX</b></div>
 <p class="mu" style="text-align:center;margin:2px 0 18px">Kayıt ol. Hesabın, çalıştığın şirketin yöneticisi onaylayınca açılır.</p>
 <input id="sn" placeholder="Ad Soyad" autocomplete="name" value="${esc(val("sn"))}">
 <input id="sc" placeholder="Çalıştığın şirketin adı (tam ve doğru yaz)" value="${esc(val("sc"))}">
 <input id="su" placeholder="Kullanıcı adı (küçük harf, rakam, . _ -)" autocapitalize="none" autocorrect="off" autocomplete="username" value="${esc(val("su"))}">
 <input id="sp1" type="password" placeholder="Parola (en az 8 karakter)" autocomplete="new-password">
 <input id="sp2" type="password" placeholder="Parola (tekrar)" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSignup()">
-<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doSignup()">Kayıt ol</button><button class="sec" onclick="loginView()">‹ Girişe dön</button></div>`);
+<label style="display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14px"><input id="sk" type="checkbox" style="width:auto;margin:3px 0 0"><span><a href="#" onclick="privPage(signupView);return false">Gizlilik Politikası ve KVKK Aydınlatma Metni</a>'ni okudum, kabul ediyorum.</span></label><div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doSignup()">Kayıt ol</button><button class="sec" onclick="loginView()">‹ Girişe dön</button></div>`);
 }
 async function doSignup() {
   const fn = val("sn").trim().replace(/\s+/g, " "), cn = val("sc").trim().replace(/\s+/g, " "), un = val("su").trim().toLowerCase(), p1 = val("sp1"), p2 = val("sp2");
   const err = document.getElementById("e"), btn = document.getElementById("lb");
   if (!fn || !cn || !un || !p1) { err.textContent = "Tüm alanları doldurun."; return; }
+  if (!document.getElementById("sk") || !document.getElementById("sk").checked) { err.textContent = "Devam etmek için Gizlilik Politikası'nı kabul etmelisiniz."; return; }
   if (!/^[a-z0-9._-]{3,30}$/.test(un)) { err.textContent = "Kullanıcı adı 3-30 karakter olmalı; sadece küçük harf (a-z), rakam ve . _ - kullanın. Türkçe karakter ve boşluk olmaz."; return; }
   if (p1.length < 8) { err.textContent = "Parola en az 8 karakter olmalı."; return; }
   if (p1 !== p2) { err.textContent = "Parolalar aynı değil."; return; }
@@ -154,7 +159,7 @@ function gateView(user, req, msg) {
     body = `<p class="mu" style="text-align:center">${req && req.status === "rejected" ? "Başvurun reddedildi. Şirket adını kontrol edip tekrar başvurabilirsin." : "Hesabın henüz bir şirkete bağlı değil. Çalıştığın şirketin adını yazıp başvur."}</p>
 <input id="gc" placeholder="Şirket adı (tam ve doğru yaz)"><div class="err" id="e">${esc(msg || "")}</div><button onclick="run(gateApply)">Başvur</button>`;
   }
-  $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Aero</span><b>DoX</b></div><div style="height:10px"></div>${body}<button class="sec" onclick="gateOut()">Çıkış</button></div>`);
+  $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Avia</span><b>DoX</b></div><div style="height:10px"></div>${body}<button class="sec" onclick="gateOut()">Çıkış</button></div>`);
 }
 async function gateApply() {
   const fn = (S.user.user_metadata && S.user.user_metadata.full_name) || "", cn = val("gc").trim(); if (!cn) return gateView(S.user, null, "Şirket adını yazın.");
@@ -255,7 +260,7 @@ function wAlerts() {
   });
   return o;
 }
-/* AeroDoX sıcak hava balonu simgesi (logodaki balon) */
+/* AviaDoX sıcak hava balonu simgesi (logodaki balon) */
 const BI = (sz = 22) => `<svg viewBox="0 0 120 142" width="${sz}" height="${Math.round(sz * 142 / 120)}" aria-hidden="true" style="vertical-align:-5px;margin-right:6px;flex:none"><path d="M60 6C28 6 10 30 10 54c0 22 16 38 32 50h36c16-12 32-28 32-50C110 30 92 6 60 6z" fill="#0b3d91"/><path d="M39 34l42 50" stroke="#8ec5ff" stroke-width="10" stroke-linecap="round"/><path d="M81 34L39 84" stroke="#fff" stroke-width="10" stroke-linecap="round"/><path d="M44 104l6 12M76 104l-6 12" stroke="#0b3d91" stroke-width="3" stroke-linecap="round"/><rect x="44" y="116" width="32" height="20" rx="4" fill="#8ec5ff" stroke="#0b3d91" stroke-width="3"/></svg>`;
 const MK = { preventive: "Önleyici", corrective: "Düzeltici" };
 const mapM = x => ({ id: x.id, b: x.balloon_id, r: x.balloon_reg || "", w: x.work || "", k: x.kind, d: x.done_on });
@@ -295,7 +300,7 @@ function nav() {
 function render() {
   if (!S.user || !S.company) return;
   if (S.tab === "pl" && !isAdmin()) S.tab = "dash";
-  const head = `<div class="cn"><span class="cb">AeroDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isAdmin() ? " · Yönetici" : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
+  const head = `<div class="cn"><span class="cb">AviaDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isAdmin() ? " · Yönetici" : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
   let b = "";
   if (S.tab === "dash") b = dashView();
   else if (S.tab === "bk") b = S.bal ? balView() : bkView();
@@ -527,7 +532,9 @@ function setView() {
 <input id="pw1" type="password" placeholder="Yeni parola (en az 8 karakter)" autocomplete="new-password"><input id="pw2" type="password" placeholder="Yeni parola (tekrar)" autocomplete="new-password"><button onclick="run(changePw)">Parolayı değiştir</button></div>
 ${adm ? joinCard() + usersCard() : ""}
 ${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>
-<div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Kullanıcılar Supabase panelinden eklenir (Authentication > Users). Adımlar kurulum rehberinde ve 2. SQL dosyasının sonunda yazılı.</div></div>` : ""}
+<div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Çalışanlar giriş ekranında Kayıt ol'a basıp şirket adını yazarak başvurur. Yukarıdaki Katılım istekleri bölümünden onaylarsın.</div></div>` : ""}
+<div class="card"><b>🔒 Gizlilik</b><div class="mu" style="margin:6px 0">Hangi verileri neden işlediğimizi ve haklarını okuyabilirsin.</div><button class="sec" onclick="privPage(render)">Gizlilik Politikası</button></div>
+<div class="card"><b>🗑 Hesabımı sil</b><div class="mu" style="margin:6px 0">Giriş hesabın, profilin, fotoğrafın ve uçuş kayıtların kalıcı olarak silinir. Geri alınamaz. Personel kaydın ve evraklar işletmeye aittir, yöneticin siler. Şirketin tek yöneticisiysen önce başka birini yönetici yap.</div><input id="dx" placeholder="Onay için SİL yaz" autocapitalize="characters"><button class="x" onclick="run(deleteAccount)">Hesabımı kalıcı olarak sil</button></div>
 <div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${adm ? "Yönetici" : "Kullanıcı"}</div></div></div>`;
 }
 
@@ -674,6 +681,23 @@ async function squareJpeg(file, size = 400) {
     c.getContext("2d").drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, size, size);
     return await new Promise(res => c.toBlob(res, "image/jpeg", 0.85));
   } finally { URL.revokeObjectURL(url); }
+}
+async function deleteAccount() {
+  const t = val("dx").trim().toLocaleUpperCase("tr-TR");
+  if (t !== "SİL" && t !== "SIL") return alert("Onay için kutuya SİL yazın.");
+  if (!confirm("Hesabın ve uçuş kayıtların kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?")) return;
+  const uid = S.user.id, co = S.co;
+  try {
+    const { data } = await sb.from("flights").select("file_path").eq("pilot_user", uid);
+    const ps = (data || []).map(x => x.file_path).filter(Boolean);
+    if (S.profile && S.profile.avatar_path) ps.push(S.profile.avatar_path);
+    if (ps.length) await sb.storage.from(BUCKET).remove(ps);
+  } catch (e) { console.warn(e); }
+  const { error } = await sb.rpc("delete_my_account"); if (error) throw error;
+  try { await FL.teardown(); indexedDB.deleteDatabase("aerodox-fl-" + co + "-" + uid); } catch (e) {}
+  await sb.auth.signOut().catch(() => {});
+  S.user = S.profile = S.company = null; S.co = null; S.logoUrl = ""; S.avatarUrl = "";
+  loginView("Hesabın silindi.");
 }
 async function setAvatar() {
   const f = fileOf("av"); if (!f) return alert("Bir fotoğraf seçin.");

@@ -1,6 +1,6 @@
 {
-  "name": "AeroDoX",
-  "short_name": "AeroDoX",
+  "name": "AviaDoX",
+  "short_name": "AviaDoX",
   "description": "Balon operasyonları için evrak ve uçuş takibi",
   "start_url": "./",
   "scope": "./",

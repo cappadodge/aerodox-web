@@ -1,4 +1,4 @@
-/* ===== AeroDoX Flight Log: uydu haritası, telemetri, GPX 1.1, KML NOTAM, 90 gün saklama, Supabase senkronu ===== */
+/* ===== AviaDoX Flight Log: uydu haritası, telemetri, GPX 1.1, KML NOTAM, 90 gün saklama, Supabase senkronu ===== */
 const FL=(()=>{
 "use strict";
 const RET_DAYS=90,DAY=864e5,WARN_M=500,FIX_MAX_AGE=10000,EMA=0.3;
@@ -159,8 +159,8 @@ function geoMsg(e){return e&&e.code===1?"Konum izni verilmedi veya bu pencerede 
 const BG=(()=>{try{const C=window.Capacitor;if(C&&C.isNativePlatform&&C.isNativePlatform())return C.registerPlugin("BackgroundGeolocation")}catch(e){}return null})();
 function toPos(l){return{coords:{latitude:l.latitude,longitude:l.longitude,altitude:l.altitude,speed:l.speed,heading:l.bearing,accuracy:l.accuracy},timestamp:l.time||Date.now()}}
 function startGeo(bg){if(Q.sim||Q.watch!=null)return;
- if(BG){const gen=Q.wgen=(Q.wgen||0)+1;const opts={requestPermissions:true,stale:false,distanceFilter:0};if(bg){opts.backgroundTitle="AeroDoX uçuş kaydı";opts.backgroundMessage="Uçuş kaydı sürüyor. Konum arka planda alınıyor."}
-  BG.addWatcher(opts,(loc,err)=>{if(err){Q.err=err.code==="NOT_AUTHORIZED"?"Konum izni verilmedi. Ayarlar > Uygulamalar > AeroDoX > İzinler > Konum > Her zaman izin ver.":"Konum alınamıyor.";ui();return}if(loc)onPos(toPos(loc))}).then(id=>{if(gen!==Q.wgen||Q.sim)BG.removeWatcher({id}).catch(()=>{});else Q.watch=id}).catch(e=>{Q.err="Konum başlatılamadı: "+errMsg(e);ui()});Q.watch="pending";return}
+ if(BG){const gen=Q.wgen=(Q.wgen||0)+1;const opts={requestPermissions:true,stale:false,distanceFilter:0};if(bg){opts.backgroundTitle="AviaDoX uçuş kaydı";opts.backgroundMessage="Uçuş kaydı sürüyor. Konum arka planda alınıyor."}
+  BG.addWatcher(opts,(loc,err)=>{if(err){Q.err=err.code==="NOT_AUTHORIZED"?"Konum izni verilmedi. Ayarlar > Uygulamalar > AviaDoX > İzinler > Konum > Her zaman izin ver.":"Konum alınamıyor.";ui();return}if(loc)onPos(toPos(loc))}).then(id=>{if(gen!==Q.wgen||Q.sim)BG.removeWatcher({id}).catch(()=>{});else Q.watch=id}).catch(e=>{Q.err="Konum başlatılamadı: "+errMsg(e);ui()});Q.watch="pending";return}
  if(!navigator.geolocation){Q.err="Bu cihaz/tarayıcı konum desteklemiyor. Test konumunu kullanabilirsiniz.";ui();return}
  try{Q.watch=navigator.geolocation.watchPosition(onPos,e=>{Q.err=geoMsg(e);ui()},{enableHighAccuracy:true,maximumAge:0,timeout:20000})}catch(e){Q.err=geoMsg(e);ui()}}
 function stopGeo(){Q.wgen=(Q.wgen||0)+1;if(Q.watch==null)return;if(BG){if(Q.watch!=="pending")BG.removeWatcher({id:Q.watch}).catch(()=>{})}else if(navigator.geolocation)navigator.geolocation.clearWatch(Q.watch);Q.watch=null}
