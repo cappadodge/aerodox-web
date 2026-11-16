@@ -19,7 +19,7 @@ const ROLE_FROM_DB = { pilot: "Pilot", ground: "Yer Ekibi", reservation: "Rezerv
 const STATUS_TO_DB = { u: "flew", i: "leave", c: "field_cancel", n: "pre_cancel" };
 const STATUS_FROM_DB = { flew: "u", leave: "i", field_cancel: "c", pre_cancel: "n" };
 const ST = { u: ["✈️", "Uçtu"], i: ["🏖️", "İzinli"], c: ["🚫", "Alana gidildi, iptal"], n: ["❌", "Önceden iptal, alana gidilmedi"] };
-const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evrakları", bk: "Balon Bakımı", pl: "Pilot Çizelgesi", fl: "Flight Log", ak: "Ayarlar" };
+const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evrakları", bk: "Balon Bakımı", pl: "Pilot Çizelgesi", fl: "Flight Log", wx: "Hava Durumu", sm: "Slot Merkezi", ak: "Ayarlar" };
 
 /* ---------- yardımcılar ---------- */
 const isAdmin = () => !!(S.profile && S.profile.role === "admin");
@@ -294,11 +294,13 @@ function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
 function nav() {
-  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || isAdmin());
+  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || isAdmin());
   return `<div class="bd" onclick="S.menu=0;render()"></div><div class="dr"><b style="padding:0 12px 8px">Menü</b>${items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("")}</div>`;
 }
 function render() {
   if (!S.user || !S.company) return;
+  if (location.hash === "#sm") { S.tab = "sm"; history.replaceState(null, "", location.pathname + location.search); }
+  if (typeof SLOT !== "undefined") SLOT.start();
   if (S.tab === "pl" && !isAdmin()) S.tab = "dash";
   const head = `<div class="cn"><span class="cb">AviaDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isAdmin() ? " · Yönetici" : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
   let b = "";
@@ -306,9 +308,13 @@ function render() {
   else if (S.tab === "bk") b = S.bal ? balView() : bkView();
   else if (S.tab === "pl") b = plView();
   else if (S.tab === "fl") b = '<div id="flhost"></div>';
+  else if (S.tab === "wx") b = '<div id="wxhost"></div>';
+  else if (S.tab === "sm") b = '<div id="smhost"></div>';
   else if (S.tab === "ak") b = setView();
   else b = docView();
   $(`<div class="wrap">${head}${b}</div>${S.menu ? nav() : ""}`);
+  if (S.tab === "sm") SLOT.mount(document.getElementById("smhost"));
+  if (S.tab === "wx") WX.mount(document.getElementById("wxhost"));
   if (S.tab === "fl") FL.mount(document.getElementById("flhost"), S.co);
 }
 function dashView() {

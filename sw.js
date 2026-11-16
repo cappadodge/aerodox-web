@@ -1,7 +1,7 @@
 // Önce ağ, olmazsa önbellek: uygulama dosyaları güncellenince hemen yenisi gelir, çevrimdışıyken açılır.
 // Supabase ve harita karoları önbelleğe alınmaz (her zaman ağdan).
-const V = "aviadox-v2";
-const SHELL = ["./", "index.html", "styles.css", "config.js", "privacy.js", "app.js", "flightlog.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
+const V = "aviadox-v4";
+const SHELL = ["./", "index.html", "styles.css", "config.js", "privacy.js", "app.js", "flightlog.js", "weather.js", "slot.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
@@ -19,4 +19,18 @@ self.addEventListener("fetch", e => {
       return res;
     }).catch(() => caches.match(r).then(m => m || (r.mode === "navigate" ? caches.match("index.html") : Response.error())))
   );
+});
+
+// Web push: sunucu (slot-watch) Slot Merkezi değişince gönderir.
+self.addEventListener("push", e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (x) {}
+  e.waitUntil(self.registration.showNotification(d.title || "AviaDoX", { body: d.body || "", tag: d.tag || "slot", renotify: true, icon: "icons/icon-192.png", badge: "icons/icon-192.png", data: { url: d.url || "./#sm" } }));
+});
+self.addEventListener("notificationclick", e => {
+  e.notification.close();
+  const u = new URL((e.notification.data && e.notification.data.url) || "./#sm", self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(cs => {
+    for (const c of cs) { if ("focus" in c) { c.navigate(u).catch(() => {}); return c.focus(); } }
+    return self.clients.openWindow(u);
+  }));
 });
