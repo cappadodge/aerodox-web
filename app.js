@@ -19,7 +19,7 @@ const ROLE_FROM_DB = { pilot: "Pilot", ground: "Yer Ekibi", reservation: "Rezerv
 const STATUS_TO_DB = { u: "flew", i: "leave", c: "field_cancel", n: "pre_cancel" };
 const STATUS_FROM_DB = { flew: "u", leave: "i", field_cancel: "c", pre_cancel: "n" };
 const ST = { u: ["✈️", "Uçtu"], i: ["🏖️", "İzinli"], c: ["🚫", "Alana gidildi, iptal"], n: ["❌", "Önceden iptal, alana gidilmedi"] };
-const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evrakları", bk: "Balon Bakımı", pl: "Pilot Çizelgesi", fl: "Flight Log", wx: "Hava Durumu", sm: "Slot Merkezi", ak: "Ayarlar" };
+const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evrakları", bk: "Balon Bakımı", pl: "Pilot Çizelgesi", fl: "Flight Log", wx: "Hava Durumu", sm: "Slot Merkezi", tr: "Eğitimler", ak: "Ayarlar" };
 
 /* ---------- yardımcılar ---------- */
 const isAdmin = () => !!(S.profile && S.profile.role === "admin");
@@ -28,6 +28,7 @@ const ROLE_NAMES = { admin: "Veriden sorumlu yönetici", flight_mgr: "Uçuş iş
 const POLICY_VER = () => String((typeof AERODOX !== "undefined" && AERODOX.POLICY_VERSION) || "1");
 const myRole = () => (S.profile && S.profile.role) || "staff";
 const isMgr = () => myRole() !== "staff";
+const canTraining = () => ["admin", "quality_mgr"].includes(myRole());
 const canManageUsers = () => ["admin", "quality_mgr"].includes(myRole());
 const canEditMaint = () => ["admin", "ground_mgr"].includes(myRole());
 const canEditSched = () => ["admin", "flight_mgr", "quality_mgr"].includes(myRole());
@@ -255,6 +256,7 @@ async function boot(user) {
   await loadLogo();
   await loadAvatar().catch(() => {});
   if (canManageUsers()) await loadAvatars().catch(() => {});
+  S.trLoaded = false; S.trs = []; S.trf = []; S.trm = null;
   S.tab = "dash"; S.menu = 0; S.person = 0; S.pv = 0; S.month = fd(new Date()).slice(0, 7);
   render();
 }
@@ -334,7 +336,7 @@ function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
 function navBtns() {
-  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || canEditSched());
+  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["tr", "🎓", "Eğitimler"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => (t[0] !== "pl" || canEditSched()) && (t[0] !== "tr" || canTraining()));
   return items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.pv=0;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("");
 }
 function nav() {
@@ -348,6 +350,7 @@ function render() {
   if (location.hash === "#sm") { S.tab = "sm"; history.replaceState(null, "", location.pathname + location.search); }
   if (typeof SLOT !== "undefined") SLOT.start();
   if (S.tab === "pl" && !canEditSched()) S.tab = "dash";
+  if (S.tab === "tr" && !canTraining()) S.tab = "dash";
   const head = `<div class="cn"><span class="cb">AviaDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isMgr() ? " · " + ROLE_NAMES[myRole()] : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
   let b = "";
   if (S.tab === "dash") b = dashView();
@@ -356,6 +359,7 @@ function render() {
   else if (S.tab === "fl") b = '<div id="flhost"></div>';
   else if (S.tab === "wx") b = '<div id="wxhost"></div>';
   else if (S.tab === "sm") b = '<div id="smhost"></div>';
+  else if (S.tab === "tr") b = trView();
   else if (S.tab === "ak") b = setView();
   else b = docView();
   $(`${sideNav()}<div class="wrap">${head}${b}</div>${S.menu ? nav() : ""}`);
@@ -363,6 +367,84 @@ function render() {
   if (S.tab === "sm") SLOT.mount(document.getElementById("smhost"));
   if (S.tab === "wx") WX.mount(document.getElementById("wxhost"));
   if (S.tab === "fl") FL.mount(document.getElementById("flhost"), S.co);
+  if (S.tab === "tr" && !S.trLoaded && !S.trLoading) loadTr();
+}
+/* ---------- Eğitimler (kalite yöneticisi + veriden sorumlu yönetici) ---------- */
+async function loadTr() {
+  S.trLoading = true;
+  try {
+    const [a, b] = await Promise.all([sb.from("trainings").select("*").order("trained_on", { ascending: false }), sb.from("training_files").select("*").order("created_at")]);
+    if (a.error) throw a.error; if (b.error) throw b.error;
+    S.trs = a.data || []; S.trf = b.data || []; S.trLoaded = true; S.trErr = "";
+  } catch (e) { S.trErr = errMsg(e); S.trLoaded = true; S.trs = S.trs || []; S.trf = S.trf || []; }
+  S.trLoading = false; if (S.tab === "tr") render();
+}
+function trView() {
+  if (!S.trLoaded) return `<p class="ld">Yükleniyor…</p>`;
+  const trs = S.trs || [], trf = S.trf || [], cur = fd(new Date()).slice(0, 7);
+  const cnt = {}; trs.forEach(t => { const k = t.trained_on.slice(0, 7); cnt[k] = (cnt[k] || 0) + 1; });
+  const ms = Object.keys(cnt); if (!ms.includes(cur)) ms.push(cur); ms.sort().reverse();
+  if (!S.trm || (!ms.includes(S.trm) && S.trm !== "all")) S.trm = cur;
+  const list = trs.filter(t => S.trm === "all" || t.trained_on.slice(0, 7) === S.trm).sort((a, b) => a.trained_on < b.trained_on ? -1 : 1);
+  const dl = d => { const [y, m, g] = d.split("-"); return g + "." + m + "." + y; };
+  const sel = `<select onchange="S.trm=this.value;render()"><option value="all" ${S.trm === "all" ? "selected" : ""}>Tüm aylar</option>${ms.map(x => `<option value="${x}" ${x === S.trm ? "selected" : ""}>${mn(x)} (${cnt[x] || 0} eğitim)${x === cur ? " · bu ay" : ""}</option>`).join("")}</select>`;
+  const cards = list.map(t => { const fs = trf.filter(f => f.training_id === t.id); return `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="mu">${dl(t.trained_on)}</span></div>
+${t.trainer ? `<div class="mu">Eğitmen: ${esc(t.trainer)}</div>` : ""}${t.notes ? `<div class="mu" style="margin-top:4px;white-space:pre-wrap">${esc(t.notes)}</div>` : ""}
+${fs.map(f => `<div class="row" style="margin-top:8px"><span>📄 ${esc(f.file_name || "evrak")}</span><span><button class="sec" style="width:auto;margin:0 4px 0 0;padding:6px 10px" onclick="run(()=>trView1('${f.id}'))">Aç</button><button class="sec" style="width:auto;margin:0;padding:6px 10px" onclick="run(()=>trDelFile('${f.id}'))">Sil</button></span></div>`).join("")}
+<div style="margin-top:10px"><input id="tf-${t.id}" type="file" accept=".pdf,image/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx" multiple><button class="sec" onclick="run(()=>trUpload('${t.id}'))">Evrak yükle</button></div>
+<button class="sec" style="margin-top:6px" onclick="run(()=>trDel('${t.id}'))">Eğitimi sil</button></div>`; }).join("");
+  return `<div style="margin-top:14px">${S.trErr ? `<p class="mu" style="color:var(--er)">${esc(S.trErr)} (SQL 17 çalıştırıldı mı?)</p>` : ""}
+<details class="card"><summary><b>➕ Yeni eğitim ekle</b></summary>
+<label class="mu">Eğitim adı</label><input id="tt" placeholder="Örn. Acil durum tatbikatı">
+<label class="mu">Tarih</label><input id="td" type="date" value="${fd(new Date())}">
+<label class="mu">Eğitmen (isteğe bağlı)</label><input id="te">
+<label class="mu">Not (isteğe bağlı)</label><textarea id="tn" rows="2"></textarea>
+<button onclick="run(trAdd)">Kaydet</button></details>
+<div class="row" style="margin:14px 0 8px"><h2 style="margin:0">${S.trm === "all" ? "Tüm eğitimler" : mn(S.trm)}</h2></div>${sel}
+${cards || `<p class="mu" style="margin-top:12px">Bu ay için eğitim yok.</p>`}</div>`;
+}
+async function trAdd() {
+  const title = val("tt").trim(), d = val("td");
+  if (!title) return alert("Eğitim adını girin."); if (!d) return alert("Tarih seçin.");
+  const { data, error } = await sb.from("trainings").insert({ company_id: S.co, title, trained_on: d, trainer: val("te").trim() || null, notes: val("tn").trim() || null, created_by: S.user.id }).select().single();
+  if (error) throw error;
+  S.trs.push(data); S.trm = d.slice(0, 7); render(); toast("Eğitim eklendi");
+}
+async function trUpload(id) {
+  const el = document.getElementById("tf-" + id), fs = el && el.files ? [...el.files] : [];
+  if (!fs.length) return alert("Lütfen dosya seçin.");
+  for (const f of fs) {
+    if (f.size > 45e6) { alert(f.name + ": dosya en fazla 45 MB olabilir."); continue; }
+    const path = `${S.co}/training/${uuid()}.${extOf(f.name)}`;
+    const { error: e1 } = await sb.storage.from(BUCKET).upload(path, f, { contentType: f.type || "application/octet-stream" });
+    if (e1) throw e1;
+    const { data, error } = await sb.from("training_files").insert({ training_id: id, company_id: S.co, file_path: path, file_name: f.name, uploaded_by: S.user.id }).select().single();
+    if (error) { sb.storage.from(BUCKET).remove([path]).catch(() => {}); throw error; }
+    S.trf.push(data);
+  }
+  render(); toast("Evrak yüklendi");
+}
+async function trView1(id) {
+  const f = S.trf.find(x => x.id === id); if (!f) return;
+  const w = window.open("about:blank", "_blank");
+  try {
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(f.file_path, 300);
+    if (error) throw error;
+    if (w) w.location.href = data.signedUrl; else location.href = data.signedUrl;
+  } catch (e) { if (w) w.close(); throw e; }
+}
+async function trDelFile(id) {
+  const f = S.trf.find(x => x.id === id); if (!f || !confirm("Bu evrak silinsin mi? Geri alınamaz.")) return;
+  const { error } = await sb.from("training_files").delete().eq("id", id); if (error) throw error;
+  sb.storage.from(BUCKET).remove([f.file_path]).catch(() => {});
+  S.trf = S.trf.filter(x => x.id !== id); render(); toast("Evrak silindi");
+}
+async function trDel(id) {
+  const t = S.trs.find(x => x.id === id); if (!t || !confirm("Bu eğitim ve tüm evrakları silinsin mi? Geri alınamaz.")) return;
+  const ps = S.trf.filter(x => x.training_id === id).map(x => x.file_path);
+  const { error } = await sb.from("trainings").delete().eq("id", id); if (error) throw error;
+  if (ps.length) sb.storage.from(BUCKET).remove(ps).catch(() => {});
+  S.trs = S.trs.filter(x => x.id !== id); S.trf = S.trf.filter(x => x.training_id !== id); render(); toast("Eğitim silindi");
 }
 function dashView() {
   const c = S.docs.filter(d => d.k === "co").length, p = S.docs.filter(d => d.k === "pe").length;
