@@ -9,6 +9,7 @@ const I18N = (() => {
 
   // Düzenli ifadeler (sayı içeren cümleler) önce uygulanır
   const RX = [
+    [/(.*) için rol "(.*)" yapılsın mı\?/g, 'Set the role of $1 to "$2"?'],
     [/(^|\s)1 kişi şirkete katılmak için onayınızı bekliyor \(Ayarlar > Katılım istekleri\)/g, "$11 person is waiting for your approval to join the company (Settings > Join requests)"],
     [/100 saatlik bakım için (\d+) saat kaldı/g, "100-hour maintenance: $1 hours left"],
     [/100 saatlik bakım gecikti \((\d+) saat aşıldı\)/g, "100-hour maintenance overdue ($1 hours over)"],
@@ -129,7 +130,7 @@ const I18N = (() => {
     "Çalışanların kayıt olurken şirket adını tam olarak şöyle yazması gerekir:": "When signing up, employees must type the company name exactly like this:",
     "📨 Katılım istekleri": "📨 Join requests", "Onayla": "Approve", "Reddet": "Reject", "Kullanıcı onaylandı": "User approved", "Başvuru reddedildi": "Application rejected", "Bu başvuru reddedilsin mi?": "Reject this application?",
     ". Onayladığın kişi normal kullanıcı olarak girer. Bir rol seçersen personel kaydı da açılır ve hesaba otomatik bağlanır.": ". The person you approve joins as a regular user. If you choose a role, a staff record is created and linked to the account automatically.",
-    "Personel kaydı oluşturma": "Create staff record", "👥 Kullanıcılar (": "👥 Users (", "Şirketine giriş yapabilen hesaplar. Yönetici yetkisi verebilir ya da erişimi kaldırabilirsin. Erişimi kaldırılan kişinin personel kaydı ve evrakları silinmez.": "Accounts that can sign in to your company. You can grant admin rights or remove access. The staff record and documents of a person whose access is removed are not deleted.",
+    "Personel kaydı oluşturma": "Create staff record", "👥 Kullanıcılar (": "👥 Users (", "Şirketine giriş yapabilen hesaplar. Rol atayabilir ya da erişimi kaldırabilirsin. Erişimi kaldırılan kişinin personel kaydı ve evrakları silinmez.": "Accounts that can sign in to your company. You can assign roles or remove access. The staff record and documents of a person whose access is removed are not deleted.",
     "Yönetici yap": "Make admin", "Normal kullanıcı yap": "Make regular user", "Bu kullanıcı": "This user", "Rol güncellendi": "Role updated", "Erişim kaldırıldı": "Access removed", "Sil": "Delete", "🗑 Sil": "🗑 Delete", "Emin misin? Sil": "Are you sure? Delete",
     "🔒 Gizlilik": "🔒 Privacy", "Hangi verileri neden işlediğimizi ve haklarını okuyabilirsin.": "Read which data we process and why, and what your rights are.", "🗑 Hesabımı sil": "🗑 Delete my account", "Hesabımı kalıcı olarak sil": "Delete my account permanently",
     "Giriş hesabın, profilin, fotoğrafın ve uçuş kayıtların kalıcı olarak silinir. Geri alınamaz. Personel kaydın ve evraklar işletmeye aittir, yöneticin siler. Şirketin tek yöneticisiysen önce başka birini yönetici yap.": "Your login account, profile, photo and flight records are permanently deleted. This cannot be undone. Your staff record and documents belong to the company; your admin removes them. If you are the only admin, make someone else an admin first.",
@@ -186,7 +187,9 @@ const I18N = (() => {
     "iPhone'da bildirim için uygulamayı Safari ▸ Paylaş ▸": "For notifications on iPhone, add the app via Safari ▸ Share ▸",
     "iPhone\\'da bildirim için uygulamayı Safari ▸ Paylaş ▸": "For notifications on iPhone, add the app via Safari ▸ Share ▸",
     // --- uyarılar ---
-    "Bu hafta": "This week", "Tür": "Type", "(kaynak:": "(source:", "➕ Bakım kaydı ekle": "➕ Add maintenance record", "Örn. 100 saatlik bakım, burner conta değişimi": "E.g. 100-hour maintenance, burner gasket replacement",
+    "Bu hafta": "This week", "Veriden sorumlu yönetici": "Data manager (full admin)", "Uçuş işletme yöneticisi": "Flight operations manager", "Yer işletme yöneticisi": "Ground operations manager", "Kalite yöneticisi": "Quality manager",
+    "Rol atayabilir ya da erişimi kaldırabilirsin.": "You can assign roles or remove access.",
+    "Tür": "Type", "(kaynak:": "(source:", "➕ Bakım kaydı ekle": "➕ Add maintenance record", "Örn. 100 saatlik bakım, burner conta değişimi": "E.g. 100-hour maintenance, burner gasket replacement",
     "yönetici": "admin", "saat": "hours", "gün": "days", "✏️ Bilgileri düzenle (yönetici)": "✏️ Edit info (admin)", "100 saatlik bakımdan beri uçulan saat": "Hours flown since the 100-hour maintenance",
     "(her satıra bir tane)": "(one per line)", "🗑 Balonu çıkar": "🗑 Remove balloon", "Uçuş saati ekle": "Add flight hours", "aylık çizelge": "monthly schedule", "Çalışma süresi (saat)": "Duty time (hours)", "Uçuş süresi (saat)": "Flight time (hours)",
     "personel kaydı bağlı değil": "no staff record linked", "personel kaydı bağlı": "staff record linked", "Kullanıcı": "User", "Erişimi kaldır": "Remove access", "Onay için SİL yaz": "Type SİL to confirm",

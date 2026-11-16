@@ -23,6 +23,16 @@ const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evraklar
 
 /* ---------- yardımcılar ---------- */
 const isAdmin = () => !!(S.profile && S.profile.role === "admin");
+/* Roller: admin = veriden sorumlu yönetici (her şey + kullanıcı yönetimi); flight_mgr = uçuş işletme; ground_mgr = yer işletme; quality_mgr = kalite; staff = kullanıcı */
+const ROLE_NAMES = { admin: "Veriden sorumlu yönetici", flight_mgr: "Uçuş işletme yöneticisi", ground_mgr: "Yer işletme yöneticisi", quality_mgr: "Kalite yöneticisi", staff: "Kullanıcı" };
+const myRole = () => (S.profile && S.profile.role) || "staff";
+const isMgr = () => myRole() !== "staff";
+const canEditMaint = () => ["admin", "ground_mgr"].includes(myRole());
+const canEditSched = () => ["admin", "flight_mgr", "quality_mgr"].includes(myRole());
+const canEditCo = () => ["admin", "quality_mgr"].includes(myRole());
+const canEditStaffRec = person => { const r = myRole(); return r === "admin" || r === "quality_mgr" || (r === "ground_mgr" && (!person || person.r === "Yer Ekibi")); };
+const canEditPDoc = person => !!person && canEditStaffRec(person);
+const canDelDoc = d => d.k === "co" ? canEditCo() : canEditPDoc(S.allStaff.find(x => x.id === d.sid));
 const $ = h => { document.body.classList.remove("hasside"); document.getElementById("app").innerHTML = h; };
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const val = id => { const e = document.getElementById(id); return e ? e.value : ""; };
@@ -274,7 +284,7 @@ function mAlerts() {
     if (b.a && i.dl <= 10) o.push([i.dl < 0 ? "er" : "wa", b.r + ": yıllık bakım " + (i.dl < 0 ? (-i.dl) + " gün gecikti" : "için " + i.dl + " gün kaldı")]);
   });
   if (isAdmin() && S.joins && S.joins.length) o.push(["wa", S.joins.length + " kişi şirkete katılmak için onayınızı bekliyor (Ayarlar > Katılım istekleri)"]);
-  if (isAdmin()) o.push(...wAlerts());
+  if (canEditSched()) o.push(...wAlerts());
   return o.length ? `<div style="margin-top:14px">${o.map(x => `<div class="card row" style="border-color:var(--${x[0]})"><span>🔔 ${esc(x[1])}</span><span class="badge ${x[0]}">${x[0] === "er" ? "Acil" : "Yaklaşıyor"}</span></div>`).join("")}</div>` : "";
 }
 
@@ -287,14 +297,14 @@ function avatarBox(sz, url, name) {
     : `<div style="width:${sz}px;height:${sz}px;border-radius:50%;background:var(--pr);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(sz / 2.6)}px;flex:none">${esc(ini)}</div>`;
 }
 function profBox() {
-  const job = isAdmin() ? "Yönetici" : ((S.people[0] && S.people[0].r) || "Personel");
+  const job = isMgr() ? ROLE_NAMES[myRole()] : ((S.people[0] && S.people[0].r) || "Personel");
   return `<div class="card" style="display:flex;align-items:center;gap:14px;margin-top:14px">${avatarBox(72)}<div style="min-width:0"><b style="font-size:17px">${esc(S.profile.full_name || S.user.email)}</b><div class="mu">${esc(job)}</div><button class="sec" style="width:auto;margin:8px 0 0;padding:6px 12px;font-size:13px" onclick="S.tab='ak';S.menu=0;render()">📷 Fotoğrafımı değiştir</button></div></div>`;
 }
 function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
 function navBtns() {
-  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || isAdmin());
+  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || canEditSched());
   return items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.pv=0;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("");
 }
 function nav() {
@@ -307,8 +317,8 @@ function render() {
   if (!S.user || !S.company) return;
   if (location.hash === "#sm") { S.tab = "sm"; history.replaceState(null, "", location.pathname + location.search); }
   if (typeof SLOT !== "undefined") SLOT.start();
-  if (S.tab === "pl" && !isAdmin()) S.tab = "dash";
-  const head = `<div class="cn"><span class="cb">AviaDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isAdmin() ? " · Yönetici" : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
+  if (S.tab === "pl" && !canEditSched()) S.tab = "dash";
+  const head = `<div class="cn"><span class="cb">AviaDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isMgr() ? " · " + ROLE_NAMES[myRole()] : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
   let b = "";
   if (S.tab === "dash") b = dashView();
   else if (S.tab === "bk") b = S.bal ? balView() : bkView();
@@ -348,7 +358,7 @@ function linkCard(person) {
   return `<details class="card"><summary><b>🔗 Giriş hesabı</b> <span class="mu">${linked ? "· " + esc(linked.full_name) : "· bağlı değil"}</span></summary><div class="mu" style="margin:8px 0">Bu kişinin giriş hesabını seç. Bağlanan kullanıcı sadece bu kişinin evraklarını görür ve yükleyebilir.</div><select id="lk"><option value="">Bağlı değil</option>${opts}</select><button onclick="run(()=>linkP('${person.id}'))">Kaydet</button></details>`;
 }
 function coView() {
-  const adm = isAdmin();
+  const adm = canEditCo();
   if (!CT.includes(S.ct)) S.ct = CT[0];
   const of = t => S.docs.filter(d => d.k === "co" && d.t === t);
   const chips = CT.map((t, i) => {
@@ -376,7 +386,7 @@ function pBadge(p) {
   return bad ? '<span class="badge er">Süresi dolmuş</span>' : soon ? '<span class="badge wa">Yakında dolacak</span>' : miss ? `<span class="badge er">${miss} eksik</span>` : '<span class="badge ok">Tamam</span>';
 }
 function peView() {
-  const adm = isAdmin();
+  const adm = isMgr();
   if (!adm) return S.people[0] ? peDetail(S.people[0], false) : '<div class="card mu" style="margin-top:14px">Hesabınız henüz bir personel kaydına bağlanmamış. Lütfen yöneticinize başvurun.</div>';
   const person = S.people[S.person];
   if (S.pv && person) return peDetail(person, true);
@@ -396,10 +406,10 @@ function peDetail(person, adm) {
 <h2>${esc(S.pt)}</h2>
 ${list.map(d => `<div class="card"><div class="row"><b>${esc(d.f || d.t)}</b><span class="badge ${st(d.d)[0]}">${st(d.d)[1]}</span></div>
 <div class="mu">${d.d ? "Bitiş: " + esc(d.d) : "Bitiş tarihi yok"}</div>
-<div class="row"><button class="sec" style="width:auto;margin:8px 0 0" onclick="run(()=>viewDoc('${d.id}'))">Görüntüle</button>${adm ? `<button class="x" onclick="run(()=>delDoc('${d.id}'))">🗑 Evrakı sil</button>` : ""}</div></div>`).join("") || '<p class="mu">Bu kategoride evrak yok.</p>'}
-<details class="card"><summary><b>➕ Bu kategoriye evrak yükle</b></summary><div style="height:8px"></div><input id="t" type="hidden" value="${esc(S.pt)}">
-<label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date"><input id="f" type="file" accept=".pdf,image/*"><button onclick="run(()=>up('pe'))">Yükle</button></details>
-${adm ? linkCard(person) + `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Bu personeli çıkar</button>` : ""}</div>`;
+<div class="row"><button class="sec" style="width:auto;margin:8px 0 0" onclick="run(()=>viewDoc('${d.id}'))">Görüntüle</button>${canEditPDoc(person) ? `<button class="x" onclick="run(()=>delDoc('${d.id}'))">🗑 Evrakı sil</button>` : ""}</div></div>`).join("") || '<p class="mu">Bu kategoride evrak yok.</p>'}
+${canEditPDoc(person) || person.u === S.user.id ? `<details class="card"><summary><b>➕ Bu kategoriye evrak yükle</b></summary><div style="height:8px"></div><input id="t" type="hidden" value="${esc(S.pt)}">
+<label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="d" type="date"><input id="f" type="file" accept=".pdf,image/*"><button onclick="run(()=>up('pe'))">Yükle</button></details>` : ""}
+${isAdmin() ? linkCard(person) : ""}${adm && canEditStaffRec(person) ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Bu personeli çıkar</button>` : ""}</div>`;
 }
 function chk(sid, person) {
   if (!person) return "";
@@ -411,8 +421,9 @@ function chk(sid, person) {
   }).join("")}</div>`;
 }
 function pAdd(del) {
-  if (!isAdmin()) return "";
-  return `<details class="card"><summary><b>➕ Pilot / personel ekle</b></summary><div style="height:10px"></div><input id="pn" placeholder="Ad Soyad"><select id="pr">${ROLES.map(x => `<option>${x}</option>`).join("")}</select><button onclick="run(addP)">Ekle</button></details>${del && S.people.length ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Seçili personeli çıkar</button>` : ""}`;
+  if (!canEditStaffRec(null)) return "";
+  const roles = myRole() === "ground_mgr" ? ["Yer Ekibi"] : ROLES;
+  return `<details class="card"><summary><b>➕ Pilot / personel ekle</b></summary><div style="height:10px"></div><input id="pn" placeholder="Ad Soyad"><select id="pr">${roles.map(x => `<option>${x}</option>`).join("")}</select><button onclick="run(addP)">Ekle</button></details>${del && S.people.length ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Seçili personeli çıkar</button>` : ""}`;
 }
 function tabChips(items, cur, setter) {
   return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${items.map(([k, t]) => `<button class="${k === cur ? "" : "sec"}" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="${setter}='${k}';render()">${esc(t)}</button>`).join("")}</div>`;
@@ -433,7 +444,7 @@ function perView() {
 }
 function balListView() {
   return `${S.balloons.map(b => `<button class="sec" style="text-align:left" onclick="S.bal='${b.id}';render()"><span style="display:flex;align-items:center">${BI(22)}${esc(b.r)}</span></button>`).join("") || '<p class="mu">Henüz balon yok.</p>'}
-<div class="card" ${isAdmin() ? "" : "hidden"} style="margin-top:14px"><b>➕ Balon ekle</b><div style="height:8px"></div>
+<div class="card" ${canEditMaint() ? "" : "hidden"} style="margin-top:14px"><b>➕ Balon ekle</b><div style="height:8px"></div>
 <input id="br" placeholder="Tescil (örn. TC-ABC)">
 <label class="mu">Güncel toplam uçuş saati</label><input id="bt" type="number" min="0" step="0.1" value="0">
 <label class="mu">Son 100 saatlik bakımdan beri uçulan saat</label><input id="bh" type="number" min="0" step="0.1" value="0">
@@ -448,7 +459,7 @@ function mForm(pre, m) {
 <label class="mu">Bakım işlem tarihi</label><input id="${pre}d" type="date" value="${m ? esc(m.d) : fd(new Date())}">`;
 }
 function monView() {
-  const adm = isAdmin(), cur = fd(new Date()).slice(0, 7);
+  const adm = canEditMaint(), cur = fd(new Date()).slice(0, 7);
   const ms = [...new Set([cur, ...S.mlogs.map(x => x.d.slice(0, 7))])].sort().reverse();
   if (!ms.includes(S.bm)) S.bm = cur;
   const rows = S.mlogs.filter(x => x.d.slice(0, 7) === S.bm).sort((a, b) => a.d.localeCompare(b.d));
@@ -466,7 +477,7 @@ function balView() {
   const b = S.balloons.find(x => x.id === S.bal); if (!b) { S.bal = null; return bkView(); }
   const n = bkInfo(b), c1 = n.h <= 0 ? "er" : n.h <= 10 ? "wa" : "ok", c2 = n.dl < 0 ? "er" : n.dl <= 10 ? "wa" : "ok", t = c => c === "ok" ? "İyi" : c === "wa" ? "Yaklaşıyor" : "Gecikti";
   const info = [["Uçuşa elverişlilik başlangıç tarihi", b.arc], ["Isı sensörü kodu", b.ts], ["Balon marka adı", b.br], ["Balon tip / model", b.md], ["Yakıt tankı seri numaraları", b.ft], ["Burner seri numarası", b.bu], ["Balon sigorta başlangıç tarihi", b.ins]];
-  const ad = isAdmin();
+  const ad = canEditMaint();
   return `<div style="margin-top:14px"><button class="sec" onclick="S.bal=null;render()">‹ Balon listesi</button>
 <div class="card"><div class="row"><b style="font-size:18px;display:flex;align-items:center">${BI(28)}${esc(b.r)}</b></div>
 <div class="row" style="margin-top:8px"><span>Güncel toplam uçuş saati</span><b>${b.t} sa</b></div>
@@ -529,15 +540,16 @@ function usersCard() {
   const me = S.user.id;
   const rows = (S.profiles || []).map(u => {
     const sf = S.allStaff.find(x => x.u === u.id), isA = u.role === "admin", self = u.id === me;
-    return `<div style="border-top:1px solid var(--bd);padding:10px 0"><div style="display:flex;align-items:center;gap:10px">${avatarBox(40, S.avatarMap && S.avatarMap[u.id], u.full_name)}<div style="min-width:0;flex:1"><b>${esc(u.full_name || "(adsız)")}${self ? " (sen)" : ""}</b><div class="mu">${sf ? esc(sf.r) + " · personel kaydı bağlı" : "personel kaydı bağlı değil"}</div></div><span class="badge ${isA ? "wa" : "ok"}">${isA ? "Yönetici" : "Kullanıcı"}</span></div>
-${self ? "" : `<div class="row" style="margin-top:8px;gap:8px"><button class="sec" style="margin:0" onclick="run(()=>setRole('${u.id}','${isA ? "staff" : "admin"}'))">${isA ? "Normal kullanıcı yap" : "Yönetici yap"}</button><button class="x" onclick="run(()=>removeU('${u.id}'))">Erişimi kaldır</button></div>`}</div>`;
+    return `<div style="border-top:1px solid var(--bd);padding:10px 0"><div style="display:flex;align-items:center;gap:10px">${avatarBox(40, S.avatarMap && S.avatarMap[u.id], u.full_name)}<div style="min-width:0;flex:1"><b>${esc(u.full_name || "(adsız)")}${self ? " (sen)" : ""}</b><div class="mu">${sf ? esc(sf.r) + " · personel kaydı bağlı" : "personel kaydı bağlı değil"}</div></div><span class="badge ${u.role === "staff" ? "ok" : "wa"}">${esc(ROLE_NAMES[u.role] || "Kullanıcı")}</span></div>
+${self ? "" : `<div class="row" style="margin-top:8px;gap:8px"><select style="margin:0" onchange="run(()=>setRole('${u.id}',this.value))">${Object.keys(ROLE_NAMES).map(k => `<option value="${k}"${k === u.role ? " selected" : ""}>${ROLE_NAMES[k]}</option>`).join("")}</select><button class="x" onclick="run(()=>removeU('${u.id}'))">Erişimi kaldır</button></div>`}</div>`;
   }).join("");
-  return `<div class="card"><b>👥 Kullanıcılar (${(S.profiles || []).length})</b><div class="mu" style="margin:6px 0">Şirketine giriş yapabilen hesaplar. Yönetici yetkisi verebilir ya da erişimi kaldırabilirsin. Erişimi kaldırılan kişinin personel kaydı ve evrakları silinmez.</div>${rows || '<p class="mu">Kullanıcı yok.</p>'}</div>`;
+  return `<div class="card"><b>👥 Kullanıcılar (${(S.profiles || []).length})</b><div class="mu" style="margin:6px 0">Şirketine giriş yapabilen hesaplar. Rol atayabilir ya da erişimi kaldırabilirsin. Erişimi kaldırılan kişinin personel kaydı ve evrakları silinmez.</div>${rows || '<p class="mu">Kullanıcı yok.</p>'}</div>`;
 }
 async function setRole(id, role) {
   if (!isAdmin()) return;
   const u = S.profiles.find(x => x.id === id); if (!u) return;
-  if (!confirm((u.full_name || "Bu kullanıcı") + (role === "admin" ? " yönetici yapılsın mı? Tüm şirket verilerini görebilir ve değiştirebilir." : " normal kullanıcı yapılsın mı?"))) return;
+  if (u.role === role) return;
+  if (!confirm((u.full_name || "Bu kullanıcı") + " için rol \"" + ROLE_NAMES[role] + "\" yapılsın mı?")) { render(); return; }
   const { error } = await sb.rpc("set_user_role", { uid: id, new_role: role }); if (error) throw error;
   u.role = role; render(); toast("Rol güncellendi");
 }
@@ -568,7 +580,7 @@ ${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="m
 <div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Çalışanlar giriş ekranında Kayıt ol'a basıp şirket adını yazarak başvurur. Yukarıdaki Katılım istekleri bölümünden onaylarsın.</div></div>` : ""}
 <div class="card"><b>🔒 Gizlilik</b><div class="mu" style="margin:6px 0">Hangi verileri neden işlediğimizi ve haklarını okuyabilirsin.</div><button class="sec" onclick="privPage(render)">Gizlilik Politikası</button></div>
 <div class="card"><b>🗑 Hesabımı sil</b><div class="mu" style="margin:6px 0">Giriş hesabın, profilin, fotoğrafın ve uçuş kayıtların kalıcı olarak silinir. Geri alınamaz. Personel kaydın ve evraklar işletmeye aittir, yöneticin siler. Şirketin tek yöneticisiysen önce başka birini yönetici yap.</div><input id="dx" placeholder="Onay için SİL yaz" autocapitalize="characters"><button class="x" onclick="run(deleteAccount)">Hesabımı kalıcı olarak sil</button></div>
-<div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${adm ? "Yönetici" : "Kullanıcı"}</div></div></div>`;
+<div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${esc(ROLE_NAMES[myRole()] || "Kullanıcı")}</div></div></div>`;
 }
 
 /* ---------- işlemler (hepsi sunucuya yazar) ---------- */
@@ -597,15 +609,14 @@ async function viewDoc(id) {
   } catch (e) { if (w) w.close(); throw e; }
 }
 async function delDoc(id) {
-  if (!isAdmin() || !confirm("Bu evrak silinsin mi? Geri alınamaz.")) return;
-  const d = S.docs.find(x => x.id === id); if (!d) return;
+  const d = S.docs.find(x => x.id === id); if (!d || !canDelDoc(d) || !confirm("Bu evrak silinsin mi? Geri alınamaz.")) return;
   const { error } = await sb.from("documents").delete().eq("id", id);
   if (error) throw error;
   sb.storage.from(BUCKET).remove([d.path]).catch(() => {});
   S.docs = S.docs.filter(x => x.id !== id); render(); toast("Evrak silindi");
 }
 async function addP() {
-  if (!isAdmin()) return;
+  if (!canEditStaffRec(null)) return;
   const n = val("pn").trim(); if (!n) return alert("İsim girin.");
   const { data, error } = await sb.from("staff").insert({ company_id: S.co, full_name: n, job_title: ROLE_TO_DB[val("pr")] || "other" }).select().single();
   if (error) throw error;
@@ -613,22 +624,22 @@ async function addP() {
   S.allStaff.push(x); S.people.push(x); S.person = S.people.length - 1; S.pv = 1; S.pt = null; render(); toast("Eklendi");
 }
 async function delP() {
-  if (!isAdmin() || !S.people.length) return;
   const x = S.people[S.person];
+  if (!x || !canEditStaffRec(x)) return;
   if (!confirm(x.n + " listeden çıkarılsın mı? Geçmiş çizelge kayıtları ve yüklenmiş evrakları saklanır.")) return;
   const { error } = await sb.from("staff").update({ active: false }).eq("id", x.id);
   if (error) throw error;
   x.on = false; S.people = S.people.filter(p => p.on); S.person = 0; S.pv = 0; render(); toast("Personel listeden çıkarıldı");
 }
 async function addB() {
-  if (!isAdmin()) return;
+  if (!canEditMaint()) return;
   const r = val("br").trim(); if (!r) return alert("Tescil girin.");
   const { data, error } = await sb.from("balloons").insert({ company_id: S.co, registration: r, hours_since_100h: Math.max(0, parseFloat(val("bh")) || 0), total_hours: Math.max(0, parseFloat(val("bt")) || 0), annual_due: val("ba") || null }).select().single();
   if (error) throw error;
   S.balloons.push(mapB(data)); render(); toast("Balon eklendi");
 }
 async function delB(id) {
-  const b = S.balloons.find(x => x.id === id); if (!isAdmin() || !b || !confirm(b.r + " balonu listeden çıkarılsın mı?")) return;
+  const b = S.balloons.find(x => x.id === id); if (!canEditMaint() || !b || !confirm(b.r + " balonu listeden çıkarılsın mı?")) return;
   const { error } = await sb.from("balloons").delete().eq("id", id); if (error) throw error;
   S.balloons = S.balloons.filter(x => x.id !== id); S.bal = null; render();
 }
@@ -637,7 +648,7 @@ async function patchBalloon(id, fields, local) {
   Object.assign(S.balloons.find(x => x.id === id), local); render();
 }
 async function addM() {
-  if (!isAdmin()) return;
+  if (!canEditMaint()) return;
   const w = val("mw").trim(), d = val("md"), bid = val("mb"), b = S.balloons.find(x => x.id === bid);
   if (!b || !w || !d) return alert("Balon, yapılan bakım ve tarih gerekli.");
   const { data, error } = await sb.from("maintenance_logs").insert({ company_id: S.co, balloon_id: bid, balloon_reg: b.r, work: w, kind: val("mk"), done_on: d }).select().single();
@@ -645,7 +656,7 @@ async function addM() {
   S.mlogs.push(mapM(data)); S.bm = d.slice(0, 7); render(); toast("Bakım kaydı eklendi");
 }
 async function saveM(id) {
-  if (!isAdmin()) return;
+  if (!canEditMaint()) return;
   const w = val("xw").trim(), d = val("xd"), bid = val("xb"), b = S.balloons.find(x => x.id === bid);
   if (!b || !w || !d) return alert("Balon, yapılan bakım ve tarih gerekli.");
   const { data, error } = await sb.from("maintenance_logs").update({ balloon_id: bid, balloon_reg: b.r, work: w, kind: val("xk"), done_on: d }).eq("id", id).select().single();
@@ -653,19 +664,19 @@ async function saveM(id) {
   Object.assign(S.mlogs.find(x => x.id === id), mapM(data)); S.bm = d.slice(0, 7); S.editM = null; render(); toast("Kayıt güncellendi");
 }
 async function delM(id) {
-  if (!isAdmin() || !confirm("Bu bakım kaydı silinsin mi?")) return;
+  if (!canEditMaint() || !confirm("Bu bakım kaydı silinsin mi?")) return;
   const { error } = await sb.from("maintenance_logs").delete().eq("id", id); if (error) throw error;
   S.mlogs = S.mlogs.filter(x => x.id !== id); S.editM = null; render(); toast("Kayıt silindi");
 }
 async function autoLog(id, work, d) {
   try {
-    const b = S.balloons.find(x => x.id === id); if (!isAdmin() || !b) return;
+    const b = S.balloons.find(x => x.id === id); if (!canEditMaint() || !b) return;
     const { data, error } = await sb.from("maintenance_logs").insert({ company_id: S.co, balloon_id: id, balloon_reg: b.r, work, kind: "preventive", done_on: d }).select().single();
     if (error) throw error; S.mlogs.push(mapM(data));
   } catch (e) { console.warn("bakım kaydı eklenemedi", e); }
 }
 async function saveB(id) {
-  if (!isAdmin()) return;
+  if (!canEditMaint()) return;
   const r = val("er").trim(); if (!r) return alert("Tescil boş olamaz.");
   const num = k => Math.max(0, parseFloat(val(k)) || 0), tx = k => val(k).trim() || null, dt = k => val(k) || null;
   const f = { registration: r, total_hours: num("et"), hours_since_100h: num("eh"), last_maint_date: dt("el"), annual_due: dt("ea"), arc_start: dt("ec"), temp_sensor_code: tx("es"), brand: tx("eb"), model: tx("em"), fuel_tanks: tx("ef"), burner_serial: tx("eu"), insurance_start: dt("ei") };
