@@ -181,7 +181,15 @@ function setSim(on){if(Q.status==="running"){note("Uçuş sürerken test konumu 
 /* ---------- oturum: Start / Stop ---------- */
 const elapsed=()=>Q.status==="running"?Q.now-Q.t0:Q.status==="stopped"?Q.t1-Q.t0:0;
 async function wakeOn(){try{if(navigator.wakeLock){Q.wake=await navigator.wakeLock.request("screen");Q.wake.addEventListener&&Q.wake.addEventListener("release",()=>{Q.wake=null;ui()})}}catch(e){Q.wake=null}ui()}
-function start(){if(Q.status==="running")return;if(!Q.fix){note("Henüz konum alınamadı. Konum iznini verin ve GPS sinyalini bekleyin.");return}
+const locKey=()=>"aviadox-locok-"+(typeof S!=="undefined"&&S.user?S.user.id:"x")+"-"+(typeof POLICY_VER==="function"?POLICY_VER():"1");
+const locOk=()=>{try{return localStorage.getItem(locKey())==="1"}catch(e){return false}};
+function askLoc(){return new Promise(res=>{if(locOk())return res(true);
+ const o=document.createElement("div");o.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px";
+ o.innerHTML='<div class="card" style="max-width:420px;margin:0"><b>📍 Konum izni</b><p class="mu" style="margin:8px 0">Uçuş kaydı için konumunuz (enlem, boylam, yükseklik, hız) yalnızca <b>Start ile Stop arasında</b> alınır. Android uygulamasında ekran kapalıyken de kayıt sürer. Kayıtları yalnızca siz görürsünüz. İzni dilediğiniz zaman telefon ayarlarından geri alabilirsiniz.</p><label style="display:flex;gap:10px;align-items:flex-start;font-size:14px"><input type="checkbox" id="lc" style="width:auto;margin:3px 0 0"><span>Uçuş kaydı için konumumun işlenmesine açık rıza veriyorum.</span></label><div style="display:flex;gap:8px;margin-top:12px"><button id="lok" disabled>Kabul ediyorum</button><button class="sec" id="lno">Vazgeç</button></div></div>';
+ document.body.appendChild(o);const ck=o.querySelector("#lc"),ok=o.querySelector("#lok");ck.onchange=()=>{ok.disabled=!ck.checked};
+ ok.onclick=()=>{try{localStorage.setItem(locKey(),"1")}catch(e){}try{sb.rpc("accept_privacy",{ver:typeof POLICY_VER==="function"?POLICY_VER():"1",loc:true}).then(()=>{},()=>{})}catch(e){}o.remove();res(true)};
+ o.querySelector("#lno").onclick=()=>{o.remove();res(false)}})}
+function start(){if(Q.status==="running")return;if(!Q.sim&&!locOk()){askLoc().then(ok=>{if(ok){startGeo();note("Konum başlatılıyor. Konum gelince Start'a tekrar bas.")}});return}if(!Q.fix){note("Henüz konum alınamadı. Konum iznini verin ve GPS sinyalini bekleyin.");return}
  Q.pts=[];Q.cur=null;Q.prevP=null;Q.last=null;Q.pendingGap=false;Q.gapMsg="";Q.gapSec=0;Q.hidAt=0;Q.draft=null;Q.draftT=0;Q.t0=Date.now();Q.now=Q.t0;Q.status="running";Q.follow=true;Q.fenceKey="";checkFence();wakeOn();restartGeo(true);
  Q.timer=setInterval(tick,1000);if(Q.map){Q.map.center(Q.fix.lat,Q.fix.lon);Q.map.redraw()}ui()}
 function tick(){const now=Date.now(),raw=Q.raw;Q.now=now;const lastP=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(raw&&now-raw.timestamp<=FIX_MAX_AGE&&!(lastP&&now-lastP.ts<900)){const p=makePoint({coords:raw.coords,timestamp:now},Q.pts.length?Q.pts[Q.pts.length-1]:null);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p}
@@ -342,7 +350,7 @@ function init(co){Q.co=co;dbp=null;mem.flights.clear();mem.meta.clear();Q.persis
  loadKmlRemote().catch(()=>{});checkDraft().catch(()=>{});
  Q.purgeT=setInterval(refreshFlights,6*36e5);Q.visH=()=>{if(document.visibilityState==="hidden"){if(Q.status==="running"&&!BG)Q.hidAt=Date.now();return}
   refreshFlights();if(Q.status==="running"){if(!Q.wake)wakeOn();if(Q.hidAt&&!BG){const g=Date.now()-Q.hidAt;Q.hidAt=0;if(g>5000){Q.pendingGap=true;Q.gapSec+=g/1000;Q.gapMsg="Uçuş sırasında uygulama toplam "+fmtDur(Q.gapSec*1000)+" arka planda kaldı; bu sürelerde konum kaydedilmedi (GPX'te iz kopuk görünür). Ekranı açık tut.";ui()}}}};document.addEventListener("visibilitychange",Q.visH);refreshFlights()}
-function mount(host,co){if(!host)return;if(Q.co&&Q.co!==co)reset();if(!Q.co)init(co);if(!Q.root)build();host.appendChild(Q.root);startGeo();showSub();ui();requestAnimationFrame(()=>{if(Q.map)Q.map.resize()})}
+function mount(host,co){if(!host)return;if(Q.co&&Q.co!==co)reset();if(!Q.co)init(co);if(!Q.root)build();host.appendChild(Q.root);if(locOk())startGeo();else if(!Q.locAsked){Q.locAsked=true;askLoc().then(ok=>{if(ok)startGeo()})}showSub();ui();requestAnimationFrame(()=>{if(Q.map)Q.map.resize()})}
 function reset(){stopGeo();stopSim();clearInterval(Q.timer);clearInterval(Q.purgeT);clearTimeout(Q.noteT);clearTimeout(Q.confirmT);if(Q.visH)document.removeEventListener("visibilitychange",Q.visH);if(Q.map)Q.map.destroy();if(Q.root)Q.root.remove();dbp=null;Object.assign(Q,fresh())}
 function teardown(){if(!Q.co)return Promise.resolve();if(Q.status==="running")return stop().then(reset,reset);reset();return Promise.resolve()}
 function armLogout(){if(Q.logoutArm)return true;Q.logoutArm=true;setTimeout(()=>{Q.logoutArm=false},8000);note("Uçuş kaydı sürüyor. Çıkış yaparsan uçuş durdurulup kaydedilir. Çıkmak için Çıkış'a tekrar bas.",8000);return false}

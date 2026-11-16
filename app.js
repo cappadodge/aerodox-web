@@ -25,6 +25,7 @@ const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evraklar
 const isAdmin = () => !!(S.profile && S.profile.role === "admin");
 /* Roller: admin = veriden sorumlu yönetici (her şey + kullanıcı yönetimi); flight_mgr = uçuş işletme; ground_mgr = yer işletme; quality_mgr = kalite; staff = kullanıcı */
 const ROLE_NAMES = { admin: "Veriden sorumlu yönetici", flight_mgr: "Uçuş işletme yöneticisi", ground_mgr: "Yer işletme yöneticisi", quality_mgr: "Kalite yöneticisi", staff: "Kullanıcı" };
+const POLICY_VER = () => String((typeof AERODOX !== "undefined" && AERODOX.POLICY_VERSION) || "1");
 const myRole = () => (S.profile && S.profile.role) || "staff";
 const isMgr = () => myRole() !== "staff";
 const canManageUsers = () => ["admin", "quality_mgr"].includes(myRole());
@@ -169,7 +170,7 @@ async function doSignup() {
   }
   if (!data.session) { btn.disabled = false; btn.textContent = "Kayıt ol"; err.textContent = "Hesap oluşturuldu ama oturum açılamadı. Girişe dönüp deneyin."; return; }
   S.user = data.user;
-  const { error: e2 } = await sb.rpc("request_join", { cname: cn, fname: fn });
+  const { error: e2 } = await sb.rpc("request_join", { cname: cn, fname: fn, ver: POLICY_VER() });
   S.joinErr = e2 ? errMsg(e2) : "";
   await bootWith(data.user);
 }
@@ -219,6 +220,22 @@ function offlineView(msg, user) {
   window.__retryUser = user;
   $(`<div class="wrap login"><div class="logo">${AERO(80)}</div><p class="mu" style="text-align:center">${esc(msg)}</p><button onclick="bootWith(window.__retryUser)">Tekrar dene</button></div>`);
 }
+function consentView(msg) {
+  $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Avia</span><b>DoX</b></div>
+<h2 style="text-align:center">Gizlilik ve KVKK Onayı</h2>
+<p class="mu" style="text-align:center">Devam etmeden önce Gizlilik Politikası ve KVKK Aydınlatma Metni'ni okuyup kabul etmeniz gerekir. Uygulama hesap bilgilerinizi, personel evraklarınızı ve (yalnızca Flight Log'da Start ile Stop arasında) konumunuzu işler.</p>
+<button class="sec" onclick="privPage(consentView)">Gizlilik Politikası ve KVKK Aydınlatma Metni'ni oku</button>
+<label style="display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14px"><input id="ck" type="checkbox" style="width:auto;margin:3px 0 0"><span>Gizlilik Politikası ve KVKK Aydınlatma Metni'ni okudum, kabul ediyorum.</span></label>
+<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doConsent()">Kabul ediyorum ve devam et</button><button class="sec" onclick="logout()">Kabul etmiyorum (çıkış)</button></div>`);
+}
+async function doConsent() {
+  const ck = document.getElementById("ck"), err = document.getElementById("e"), btn = document.getElementById("lb");
+  if (!ck || !ck.checked) { err.textContent = "Devam etmek için Gizlilik Politikası'nı kabul etmelisiniz."; return; }
+  btn.disabled = true;
+  const { error } = await sb.rpc("accept_privacy", { ver: POLICY_VER(), loc: false });
+  if (error) { btn.disabled = false; err.textContent = errMsg(error); return; }
+  await bootWith(S.user);
+}
 async function boot(user) {
   S.user = user;
   const { data: pr, error: e1 } = await sb.from("profiles").select("*").eq("id", user.id).maybeSingle();
@@ -233,6 +250,7 @@ async function boot(user) {
   const { data: co, error: e2 } = await sb.from("companies").select("*").eq("id", S.co).single();
   if (e2) throw e2;
   S.company = co;
+  if ("consent_version" in pr && pr.consent_version !== POLICY_VER()) { consentView(); return; }
   await loadAll();
   await loadLogo();
   await loadAvatar().catch(() => {});
