@@ -316,7 +316,9 @@ function wAlerts() {
 const BI = (sz = 22) => `<svg viewBox="0 0 120 142" width="${sz}" height="${Math.round(sz * 142 / 120)}" aria-hidden="true" style="vertical-align:-5px;margin-right:6px;flex:none"><path d="M60 6C28 6 10 30 10 54c0 22 16 38 32 50h36c16-12 32-28 32-50C110 30 92 6 60 6z" fill="#0b3d91"/><path d="M39 34l42 50" stroke="#8ec5ff" stroke-width="10" stroke-linecap="round"/><path d="M81 34L39 84" stroke="#fff" stroke-width="10" stroke-linecap="round"/><path d="M44 104l6 12M76 104l-6 12" stroke="#0b3d91" stroke-width="3" stroke-linecap="round"/><rect x="44" y="116" width="32" height="20" rx="4" fill="#8ec5ff" stroke="#0b3d91" stroke-width="3"/></svg>`;
 const MK = { preventive: "Önleyici", corrective: "Düzeltici" };
 const mapM = x => ({ id: x.id, b: x.balloon_id, r: x.balloon_reg || "", w: x.work || "", k: x.kind, d: x.done_on });
-const mapB = x => ({ id: x.id, r: x.registration, h: Number(x.hours_since_100h) || 0, a: x.annual_due, t: Number(x.total_hours) || 0, lm: x.last_maint_date, arc: x.arc_start, ts: x.temp_sensor_code || "", br: x.brand || "", md: x.model || "", ft: x.fuel_tanks || "", bu: x.burner_serial || "", ins: x.insurance_start });
+const CAMOS = [["kbbm", "Kapadokya Balon Bakım Merkezi"], ["khtm", "Kapadokya Havacılık Teknolojileri Merkezi"]];
+const camoName = id => (CAMOS.find(c => c[0] === id) || [0, ""])[1];
+const mapB = x => ({ id: x.id, r: x.registration, h: Number(x.hours_since_100h) || 0, a: x.annual_due, t: Number(x.total_hours) || 0, lm: x.last_maint_date, arc: x.arc_start, ts: x.temp_sensor_code || "", br: x.brand || "", md: x.model || "", ft: x.fuel_tanks || "", bu: x.burner_serial || "", ins: x.insurance_start, camo: x.camo || "" });
 function bkInfo(b) { return { h: Math.round((100 - b.h) * 10) / 10, dl: b.a ? Math.ceil((new Date(b.a) - new Date()) / 864e5) : 999 }; }
 function mAlerts() {
   const o = [];
@@ -551,9 +553,22 @@ function tabChips(items, cur, setter) {
   return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${items.map(([k, t]) => `<button class="${k === cur ? "" : "sec"}" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="${setter}='${k}';render()">${esc(t)}</button>`).join("")}</div>`;
 }
 function bkView() {
-  if (!["per", "bal", "mon"].includes(S.bk)) S.bk = "per";
-  const chips = tabChips([["per", "Periyodik bakım"], ["bal", "Balonlar"], ["mon", "Aylık bakım çizelgesi"]], S.bk, "S.bk");
-  return `<div style="margin-top:14px">${chips}${S.bk === "per" ? perView() : S.bk === "bal" ? balListView() : monView()}</div>`;
+  if (!["per", "bal", "mon", "camo"].includes(S.bk)) S.bk = "per";
+  const chips = tabChips([["per", "Periyodik bakım"], ["bal", "Balonlar"], ["mon", "Aylık bakım çizelgesi"], ["camo", "🤝 Anlaşmalı CAMO"]], S.bk, "S.bk");
+  return `<div style="margin-top:14px">${chips}${S.bk === "per" ? perView() : S.bk === "bal" ? balListView() : S.bk === "camo" ? camoView() : monView()}</div>`;
+}
+function camoView() {
+  const ad = canEditMaint();
+  const cards = CAMOS.map(([id, nm]) => { const bs = S.balloons.filter(b => b.camo === id);
+    return `<div class="card"><b>🤝 ${esc(nm)}</b><div class="mu" style="margin:4px 0">Anlaşmalı CAMO · ${bs.length} balon</div>${bs.map(b => `<div class="row" style="margin-top:6px;cursor:pointer" onclick="S.bal='${b.id}';render()"><span style="display:flex;align-items:center">${BI(20)}${esc(b.r)} ›</span></div>`).join("") || '<div class="mu">Atanmış balon yok.</div>'}</div>`; }).join("");
+  const un = S.balloons.filter(b => !camoName(b.camo));
+  const asg = `<div class="card"><b>Balon – CAMO ataması</b><div class="mu" style="margin:4px 0 8px">Her balon için anlaşmalı CAMO seçin.${ad ? "" : " (Yalnızca görüntüleme.)"}</div>${S.balloons.map(b => `<div class="row" style="margin-top:8px"><span style="display:flex;align-items:center">${BI(20)}${esc(b.r)}</span>${ad ? `<select style="width:auto;max-width:60%" onchange="run(()=>setCamo('${b.id}',this.value))"><option value="">Atanmadı</option>${CAMOS.map(c => `<option value="${c[0]}" ${b.camo === c[0] ? "selected" : ""}>${esc(c[1])}</option>`).join("")}</select>` : `<span class="mu">${esc(camoName(b.camo) || "Atanmadı")}</span>`}</div>`).join("") || '<p class="mu">Henüz balon yok.</p>'}</div>`;
+  return `<div style="margin-top:14px">${cards}${un.length ? `<div class="mu" style="margin:0 0 10px">CAMO atanmamış balon: ${un.length}</div>` : ""}${asg}</div>`;
+}
+async function setCamo(id, v) {
+  if (!canEditMaint()) return;
+  const { error } = await sb.from("balloons").update({ camo: v || null }).eq("id", id); if (error) throw error;
+  const b = S.balloons.find(x => x.id === id); if (b) b.camo = v || ""; render(); toast("CAMO ataması kaydedildi");
 }
 function perView() {
   const sum = S.balloons.map(b => {
@@ -605,6 +620,7 @@ function balView() {
 <div class="row" style="margin-top:8px"><span>Güncel toplam uçuş saati</span><b>${b.t} sa</b></div>
 <div class="row" style="margin-top:6px"><span>100 saatlik bakıma kalan: ${n.h} saat</span><span class="badge ${c1}">${t(c1)}</span></div>
 <div class="row" style="margin-top:6px"><span>Son bakım tarihi: ${b.lm ? esc(b.lm) : "-"}</span></div>
+<div class="row" style="margin-top:6px"><span>Anlaşmalı CAMO: ${esc(camoName(b.camo) || "atanmadı")}</span></div>
 <div class="row" style="margin-top:6px"><span>Yıllık bakım: ${b.a ? esc(b.a) + " (" + n.dl + " gün)" : "tarih yok"}</span><span class="badge ${c2}">${t(c2)}</span></div>
 <input id="fh${b.id}" type="number" min="0" step="0.1" placeholder="Uçuş saati ekle" style="margin-top:10px">
 <button onclick="run(()=>addH('${b.id}'))">Saat ekle</button>
