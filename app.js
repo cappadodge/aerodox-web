@@ -353,7 +353,7 @@ function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
 function navBtns() {
-  const items = isCamo() ? [["cm", "🏢", "Şirketler"], ["ak", "⚙️", "Ayarlar"]] : [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["tr", "🎓", "Eğitimler"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => (t[0] !== "pl" || canEditSched()) && (t[0] !== "tr" || canTraining()));
+  const items = isCamo() ? [["cm", "🏢", "Şirketler"], ["ak", "⚙️", "Ayarlar"]] : [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["tr", "🎓", "Eğitimler"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => t[0] !== "pl" || canEditSched());
   return items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.pv=0;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("");
 }
 function nav() {
@@ -367,7 +367,6 @@ function render() {
   if (location.hash === "#sm") { S.tab = "sm"; history.replaceState(null, "", location.pathname + location.search); }
   if (typeof SLOT !== "undefined" && !isCamo()) SLOT.start();
   if (S.tab === "pl" && !canEditSched()) S.tab = "dash";
-  if (S.tab === "tr" && !canTraining()) S.tab = "dash";
   if (isCamo() && !["cm", "ak"].includes(S.tab)) S.tab = "cm";
   const head = `<div class="cn"><span class="cb">AviaDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isMgr() ? " · " + ROLE_NAMES[myRole()] : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
   let b = "";
@@ -392,42 +391,88 @@ function render() {
 async function loadTr() {
   S.trLoading = true;
   try {
-    const [a, b] = await Promise.all([sb.from("trainings").select("*").order("trained_on", { ascending: false }), sb.from("training_files").select("*").order("created_at")]);
+    const [a, b] = await Promise.all([sb.from("trainings").select("*").order("trained_on", { ascending: false }), canTraining() ? sb.from("training_files").select("*").order("created_at") : Promise.resolve({ data: [] })]);
     if (a.error) throw a.error; if (b.error) throw b.error;
     S.trs = a.data || []; S.trf = b.data || []; S.trLoaded = true; S.trErr = "";
   } catch (e) { S.trErr = errMsg(e); S.trLoaded = true; S.trs = S.trs || []; S.trf = S.trf || []; }
   S.trLoading = false; if (S.tab === "tr") render();
 }
+function trCard(t) {
+  const ro = !canTraining();
+  const trf = S.trf || [], fs = trf.filter(f => f.training_id === t.id), dl = d => { const [y, m, g] = d.split("-"); return g + "." + m + "." + y; };
+  const fut = t.trained_on > fd(new Date());
+  if (ro) return `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="mu">${dl(t.trained_on)}</span></div><div style="margin-top:4px"><span class="badge ${fut ? "wa" : "ok"}">${fut ? "Planlandı" : "Yapıldı"}</span></div>${t.trainer ? `<div class="mu" style="margin-top:4px">Eğitmen: ${esc(t.trainer)}</div>` : ""}${t.notes ? `<div class="mu" style="margin-top:4px;white-space:pre-wrap">${esc(t.notes)}</div>` : ""}</div>`;
+  if (S.tre === t.id) return `<div class="card"><b>✏️ Eğitimi düzenle</b>
+<label class="mu">Eğitim adı</label><input id="et-t" value="${esc(t.title)}">
+<label class="mu">Tarih</label><input id="et-d" type="date" value="${esc(t.trained_on)}">
+<label class="mu">Eğitmen / eğitimi veren kişi</label><input id="et-e" value="${esc(t.trainer || "")}">
+<label class="mu">Not</label><textarea id="et-n" rows="2">${esc(t.notes || "")}</textarea>
+<button onclick="run(()=>trSave('${t.id}'))">Kaydet</button><button class="sec" onclick="S.tre=null;render()">Vazgeç</button></div>`;
+  return `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="mu">${dl(t.trained_on)}</span></div>
+<div style="margin-top:4px"><span class="badge ${fut ? "wa" : "ok"}">${fut ? "Planlandı" : "Yapıldı"}</span></div>
+${t.trainer ? `<div class="mu" style="margin-top:4px">Eğitmen: ${esc(t.trainer)}</div>` : ""}${t.notes ? `<div class="mu" style="margin-top:4px;white-space:pre-wrap">${esc(t.notes)}</div>` : ""}
+${fs.map(f => `<div class="row" style="margin-top:8px"><span>📄 ${esc(f.file_name || "evrak")}</span><span><button class="sec" style="width:auto;margin:0 4px 0 0;padding:6px 10px" onclick="run(()=>trView1('${f.id}'))">Aç</button><button class="sec" style="width:auto;margin:0;padding:6px 10px" onclick="run(()=>trDelFile('${f.id}'))">Sil</button></span></div>`).join("")}
+<div style="margin-top:10px"><input id="tf-${t.id}" type="file" accept=".pdf,image/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx" multiple><button class="sec" onclick="run(()=>trUpload('${t.id}'))">Evrak yükle</button></div>
+<button class="sec" style="margin-top:6px" onclick="S.tre='${t.id}';render()">✏️ Düzenle</button><button class="sec" style="margin-top:6px" onclick="run(()=>trDel('${t.id}'))">Eğitimi sil</button></div>`;
+}
+function trAddForm(d) {
+  return `<details class="card" ${S.trOpen ? "open" : ""}><summary><b>➕ Yeni eğitim ekle / planla</b></summary>
+<label class="mu">Eğitim adı</label><input id="tt" placeholder="Örn. Acil durum tatbikatı">
+<label class="mu">Tarih</label><input id="td" type="date" value="${esc(d || fd(new Date()))}">
+<label class="mu">Eğitmen / eğitimi veren kişi (isteğe bağlı)</label><input id="te">
+<label class="mu">Not (isteğe bağlı)</label><textarea id="tn" rows="2"></textarea>
+<button onclick="run(trAdd)">Kaydet</button></details>`;
+}
+function trCal() {
+  const trs = S.trs || [], today = fd(new Date());
+  if (!S.trc) S.trc = today.slice(0, 7);
+  const [y, m] = S.trc.split("-").map(Number), first = new Date(y, m - 1, 1), n = new Date(y, m, 0).getDate(), off = (first.getDay() + 6) % 7;
+  const step = k => { const d = new Date(y, m - 1 + k, 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); };
+  const by = {}; trs.forEach(t => { if (t.trained_on.slice(0, 7) === S.trc) (by[t.trained_on] = by[t.trained_on] || []).push(t); });
+  let cells = ""; for (let i = 0; i < off; i++) cells += `<div></div>`;
+  for (let g = 1; g <= n; g++) {
+    const ds = S.trc + "-" + String(g).padStart(2, "0"), L = by[ds] || [], sel = S.trd === ds;
+    cells += `<div onclick="S.trd='${ds}';S.trOpen=0;render()" style="min-height:62px;padding:3px;border:1px solid ${sel ? "var(--pr)" : "var(--bd)"};border-radius:8px;cursor:pointer;overflow:hidden;${ds === today ? "background:rgba(11,61,145,.12)" : ""}"><div style="font-size:12px;font-weight:700">${g}</div>${L.slice(0, 2).map(t => `<div style="font-size:10px;line-height:1.2;background:${t.trained_on > today ? "#f08a24" : "#2e9e5b"};color:#fff;border-radius:4px;padding:1px 3px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.title)}</div>`).join("")}${L.length > 2 ? `<div style="font-size:10px" class="mu">+${L.length - 2}</div>` : ""}</div>`;
+  }
+  const sel = S.trd && S.trd.slice(0, 7) === S.trc ? S.trd : null, dayL = sel ? (by[sel] || []) : [];
+  const upc = trs.filter(t => t.trained_on >= today).sort((a, b) => a.trained_on < b.trained_on ? -1 : 1).slice(0, 8);
+  return `<div class="row" style="margin:12px 0 8px"><button class="sec" style="width:auto;margin:0" onclick="S.trc='${step(-1)}';S.trd=null;render()">‹</button><b>${mn(S.trc)}</b><button class="sec" style="width:auto;margin:0" onclick="S.trc='${step(1)}';S.trd=null;render()">›</button></div>
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center;font-size:11px" class="mu">${["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"].map(x => `<div>${x}</div>`).join("")}</div>
+<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px">${cells}</div>
+<div class="mu" style="margin:6px 0"><span style="color:#f08a24">■</span> Planlanan <span style="color:#2e9e5b">■</span> Yapılan ${canTraining() ? "· Güne dokunup o güne eğitim ekleyebilirsiniz." : "· Güne dokunarak o günün eğitimlerini görebilirsiniz."}</div>
+${sel ? `<h2>${sel.split("-").reverse().join(".")}</h2>${dayL.map(trCard).join("") || '<p class="mu">Bu gün için eğitim yok.</p>'}${canTraining() ? trAddForm(sel) : ""}` : ""}
+${upc.length ? `<h2>Yaklaşan eğitimler</h2>${upc.map(t => `<div class="card" style="cursor:pointer" onclick="S.trc='${t.trained_on.slice(0, 7)}';S.trd='${t.trained_on}';render()"><div class="row"><b>${esc(t.title)}</b><span class="mu">${t.trained_on.split("-").reverse().join(".")}</span></div>${t.trainer ? `<div class="mu">Eğitmen: ${esc(t.trainer)}</div>` : ""}</div>`).join("")}` : ""}`;
+}
 function trView() {
   if (!S.trLoaded) return `<p class="ld">Yükleniyor…</p>`;
-  const trs = S.trs || [], trf = S.trf || [], cur = fd(new Date()).slice(0, 7);
+  const trs = S.trs || [], cur = fd(new Date()).slice(0, 7);
+  if (!canTraining()) return `<div style="margin-top:14px">${S.trErr ? `<p class="mu" style="color:var(--er)">${esc(S.trErr)}</p>` : ""}${trCal()}</div>`;
+  if (!["list", "cal"].includes(S.trv)) S.trv = "cal";
+  const chips = tabChips([["cal", "📅 Takvim / Plan"], ["list", "📋 Liste"]], S.trv, "S.trv");
+  const err = S.trErr ? `<p class="mu" style="color:var(--er)">${esc(S.trErr)} (SQL 17 çalıştırıldı mı?)</p>` : "";
+  if (S.trv === "cal") return `<div style="margin-top:14px">${chips}${err}${trCal()}${S.trd ? "" : trAddForm()}</div>`;
   const cnt = {}; trs.forEach(t => { const k = t.trained_on.slice(0, 7); cnt[k] = (cnt[k] || 0) + 1; });
   const ms = Object.keys(cnt); if (!ms.includes(cur)) ms.push(cur); ms.sort().reverse();
   if (!S.trm || (!ms.includes(S.trm) && S.trm !== "all")) S.trm = cur;
   const list = trs.filter(t => S.trm === "all" || t.trained_on.slice(0, 7) === S.trm).sort((a, b) => a.trained_on < b.trained_on ? -1 : 1);
-  const dl = d => { const [y, m, g] = d.split("-"); return g + "." + m + "." + y; };
   const sel = `<select onchange="S.trm=this.value;render()"><option value="all" ${S.trm === "all" ? "selected" : ""}>Tüm aylar</option>${ms.map(x => `<option value="${x}" ${x === S.trm ? "selected" : ""}>${mn(x)} (${cnt[x] || 0} eğitim)${x === cur ? " · bu ay" : ""}</option>`).join("")}</select>`;
-  const cards = list.map(t => { const fs = trf.filter(f => f.training_id === t.id); return `<div class="card"><div class="row"><b>${esc(t.title)}</b><span class="mu">${dl(t.trained_on)}</span></div>
-${t.trainer ? `<div class="mu">Eğitmen: ${esc(t.trainer)}</div>` : ""}${t.notes ? `<div class="mu" style="margin-top:4px;white-space:pre-wrap">${esc(t.notes)}</div>` : ""}
-${fs.map(f => `<div class="row" style="margin-top:8px"><span>📄 ${esc(f.file_name || "evrak")}</span><span><button class="sec" style="width:auto;margin:0 4px 0 0;padding:6px 10px" onclick="run(()=>trView1('${f.id}'))">Aç</button><button class="sec" style="width:auto;margin:0;padding:6px 10px" onclick="run(()=>trDelFile('${f.id}'))">Sil</button></span></div>`).join("")}
-<div style="margin-top:10px"><input id="tf-${t.id}" type="file" accept=".pdf,image/*,.doc,.docx,.ppt,.pptx,.xls,.xlsx" multiple><button class="sec" onclick="run(()=>trUpload('${t.id}'))">Evrak yükle</button></div>
-<button class="sec" style="margin-top:6px" onclick="run(()=>trDel('${t.id}'))">Eğitimi sil</button></div>`; }).join("");
-  return `<div style="margin-top:14px">${S.trErr ? `<p class="mu" style="color:var(--er)">${esc(S.trErr)} (SQL 17 çalıştırıldı mı?)</p>` : ""}
-<details class="card"><summary><b>➕ Yeni eğitim ekle</b></summary>
-<label class="mu">Eğitim adı</label><input id="tt" placeholder="Örn. Acil durum tatbikatı">
-<label class="mu">Tarih</label><input id="td" type="date" value="${fd(new Date())}">
-<label class="mu">Eğitmen (isteğe bağlı)</label><input id="te">
-<label class="mu">Not (isteğe bağlı)</label><textarea id="tn" rows="2"></textarea>
-<button onclick="run(trAdd)">Kaydet</button></details>
+  return `<div style="margin-top:14px">${chips}${err}${trAddForm()}
 <div class="row" style="margin:14px 0 8px"><h2 style="margin:0">${S.trm === "all" ? "Tüm eğitimler" : mn(S.trm)}</h2></div>${sel}
-${cards || `<p class="mu" style="margin-top:12px">Bu ay için eğitim yok.</p>`}</div>`;
+${list.map(trCard).join("") || `<p class="mu" style="margin-top:12px">Bu ay için eğitim yok.</p>`}</div>`;
+}
+async function trSave(id) {
+  const t = S.trs.find(x => x.id === id); if (!t) return;
+  const title = val("et-t").trim(), d = val("et-d"); if (!title) return alert("Eğitim adını girin."); if (!d) return alert("Tarih seçin.");
+  const f = { title, trained_on: d, trainer: val("et-e").trim() || null, notes: val("et-n").trim() || null };
+  const { error } = await sb.from("trainings").update(f).eq("id", id); if (error) throw error;
+  Object.assign(t, f); S.tre = null; S.trc = d.slice(0, 7); S.trd = d; render(); toast("Eğitim güncellendi");
 }
 async function trAdd() {
   const title = val("tt").trim(), d = val("td");
   if (!title) return alert("Eğitim adını girin."); if (!d) return alert("Tarih seçin.");
   const { data, error } = await sb.from("trainings").insert({ company_id: S.co, title, trained_on: d, trainer: val("te").trim() || null, notes: val("tn").trim() || null, created_by: S.user.id }).select().single();
   if (error) throw error;
-  S.trs.push(data); S.trm = d.slice(0, 7); render(); toast("Eğitim eklendi");
+  S.trs.push(data); S.trm = d.slice(0, 7); S.trc = d.slice(0, 7); if (S.trv === "cal") S.trd = d; S.trOpen = 0; render(); toast("Eğitim eklendi");
 }
 async function trUpload(id) {
   const el = document.getElementById("tf-" + id), fs = el && el.files ? [...el.files] : [];
