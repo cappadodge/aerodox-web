@@ -19,14 +19,15 @@ const ROLE_FROM_DB = { pilot: "Pilot", ground: "Yer Ekibi", reservation: "Rezerv
 const STATUS_TO_DB = { u: "flew", i: "leave", c: "field_cancel", n: "pre_cancel" };
 const STATUS_FROM_DB = { flew: "u", leave: "i", field_cancel: "c", pre_cancel: "n" };
 const ST = { u: ["✈️", "Uçtu"], i: ["🏖️", "İzinli"], c: ["🚫", "Alana gidildi, iptal"], n: ["❌", "Önceden iptal, alana gidilmedi"] };
-const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evrakları", bk: "Balon Bakımı", pl: "Pilot Çizelgesi", fl: "Flight Log", wx: "Hava Durumu", sm: "Slot Merkezi", tr: "Eğitimler", ak: "Ayarlar" };
+const TITLES = { dash: "Panel", co: "Şirket Evrakları", pe: "Personel Evrakları", bk: "Balon Bakımı", pl: "Pilot Çizelgesi", fl: "Flight Log", wx: "Hava Durumu", sm: "Slot Merkezi", tr: "Eğitimler", cm: "Şirketler", ak: "Ayarlar" };
 
 /* ---------- yardımcılar ---------- */
 const isAdmin = () => !!(S.profile && S.profile.role === "admin");
 /* Roller: admin = veriden sorumlu yönetici (her şey + kullanıcı yönetimi); flight_mgr = uçuş işletme; ground_mgr = yer işletme; quality_mgr = kalite; staff = kullanıcı */
-const ROLE_NAMES = { admin: "Veriden sorumlu yönetici", flight_mgr: "Uçuş işletme yöneticisi", ground_mgr: "Yer işletme yöneticisi", quality_mgr: "Kalite yöneticisi", staff: "Kullanıcı" };
+const ROLE_NAMES = { admin: "Veriden sorumlu yönetici", flight_mgr: "Uçuş işletme yöneticisi", ground_mgr: "Yer işletme yöneticisi", quality_mgr: "Kalite yöneticisi", camo_admin: "CAMO yöneticisi", staff: "Kullanıcı" };
 const POLICY_VER = () => String((typeof AERODOX !== "undefined" && AERODOX.POLICY_VERSION) || "1");
 const myRole = () => (S.profile && S.profile.role) || "staff";
+const isCamo = () => myRole() === "camo_admin";
 const isMgr = () => myRole() !== "staff";
 const canTraining = () => ["admin", "quality_mgr"].includes(myRole());
 const canManageUsers = () => ["admin", "quality_mgr"].includes(myRole());
@@ -81,7 +82,7 @@ async function fetchAll(mk) { // Supabase tek istekte en fazla 1000 satır verir
 /* ---------- veri yükleme ---------- */
 async function loadAll() {
   const d = new Date(); d.setMonth(d.getMonth() - 24); const since = fd(d);
-  const [st, dc, bl, lg, pf, ml, jr] = await Promise.all([
+  const [st, dc, bl, lg, pf, ml, jr, bd, cc] = await Promise.all([
     fetchAll(() => sb.from("staff").select("*").order("created_at")),
     fetchAll(() => sb.from("documents").select("*").order("created_at")),
     fetchAll(() => sb.from("balloons").select("*").order("created_at")),
@@ -89,7 +90,11 @@ async function loadAll() {
     canManageUsers() ? fetchAll(() => sb.from("profiles").select("*").order("full_name")) : Promise.resolve([]),
     fetchAll(() => sb.from("maintenance_logs").select("*").order("done_on", { ascending: false })).catch(() => []),
     canManageUsers() ? fetchAll(() => sb.from("join_requests").select("*").eq("status", "pending").order("created_at")).catch(() => []) : Promise.resolve([]),
+    fetchAll(() => sb.from("balloon_docs").select("*").order("created_at")).catch(() => []),
+    isCamo() ? fetchAll(() => sb.from("companies").select("id,name").order("name")).catch(() => []) : Promise.resolve([]),
   ]);
+  S.bdocs = bd.map(x => ({ id: x.id, b: x.balloon_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
+  S.camoCos = cc;
   S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null }));
   S.profiles = pf; S.joins = jr; S.mlogs = ml.map(mapM);
   S.people = S.allStaff.filter(x => x.on);
@@ -267,7 +272,7 @@ async function boot(user) {
   await loadAvatar().catch(() => {});
   if (canManageUsers()) await loadAvatars().catch(() => {});
   S.trLoaded = false; S.trs = []; S.trf = []; S.trm = null;
-  S.tab = "dash"; S.menu = 0; S.person = 0; S.pv = 0; S.month = fd(new Date()).slice(0, 7);
+  S.tab = isCamo() ? "cm" : "dash"; S.cmCo = null; S.cmBal = null; S.menu = 0; S.person = 0; S.pv = 0; S.month = fd(new Date()).slice(0, 7);
   render();
 }
 async function logout() {
@@ -318,7 +323,7 @@ const MK = { preventive: "Önleyici", corrective: "Düzeltici" };
 const mapM = x => ({ id: x.id, b: x.balloon_id, r: x.balloon_reg || "", w: x.work || "", k: x.kind, d: x.done_on });
 const CAMOS = [["kbbm", "Kapadokya Balon Bakım Merkezi"], ["khtm", "Kapadokya Havacılık Teknolojileri Merkezi"]];
 const camoName = id => (CAMOS.find(c => c[0] === id) || [0, ""])[1];
-const mapB = x => ({ id: x.id, r: x.registration, h: Number(x.hours_since_100h) || 0, a: x.annual_due, t: Number(x.total_hours) || 0, lm: x.last_maint_date, arc: x.arc_start, ts: x.temp_sensor_code || "", br: x.brand || "", md: x.model || "", ft: x.fuel_tanks || "", bu: x.burner_serial || "", ins: x.insurance_start, camo: x.camo || "" });
+const mapB = x => ({ id: x.id, r: x.registration, h: Number(x.hours_since_100h) || 0, a: x.annual_due, t: Number(x.total_hours) || 0, lm: x.last_maint_date, arc: x.arc_start, ts: x.temp_sensor_code || "", br: x.brand || "", md: x.model || "", ft: x.fuel_tanks || "", bu: x.burner_serial || "", ins: x.insurance_start, camo: x.camo || "", co: x.company_id });
 function bkInfo(b) { return { h: Math.round((100 - b.h) * 10) / 10, dl: b.a ? Math.ceil((new Date(b.a) - new Date()) / 864e5) : 999 }; }
 function mAlerts() {
   const o = [];
@@ -348,7 +353,7 @@ function logoBox() {
   return `<div class="card" style="text-align:center;margin-top:14px">${S.logoUrl ? `<img src="${esc(S.logoUrl)}" alt="" style="width:112px;height:112px;border-radius:50%;object-fit:cover">` : BAL(70)}<div style="margin-top:8px"><b>${esc(S.company.name)}</b></div></div>`;
 }
 function navBtns() {
-  const items = [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["tr", "🎓", "Eğitimler"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => (t[0] !== "pl" || canEditSched()) && (t[0] !== "tr" || canTraining()));
+  const items = isCamo() ? [["cm", "🏢", "Şirketler"], ["ak", "⚙️", "Ayarlar"]] : [["dash", "📊", "Panel"], ["co", "🏢", "Şirket"], ["pe", "👥", "Personel"], ["bk", "🔧", "Bakım"], ["wx", "🌤️", "Hava Durumu"], ["sm", "🚩", "Slot Merkezi"], ["tr", "🎓", "Eğitimler"], ["pl", "⏱️", "Çizelge"], ["fl", "🛰️", "Flight Log"], ["ak", "⚙️", "Ayarlar"]].filter(t => (t[0] !== "pl" || canEditSched()) && (t[0] !== "tr" || canTraining()));
   return items.map(t => `<button class="${S.tab === t[0] ? "on" : ""}" onclick="S.tab='${t[0]}';S.bal=null;S.pv=0;S.menu=0;render()">${t[1]} ${t[2]}</button>`).join("");
 }
 function nav() {
@@ -360,9 +365,10 @@ function sideNav() {
 function render() {
   if (!S.user || !S.company) return;
   if (location.hash === "#sm") { S.tab = "sm"; history.replaceState(null, "", location.pathname + location.search); }
-  if (typeof SLOT !== "undefined") SLOT.start();
+  if (typeof SLOT !== "undefined" && !isCamo()) SLOT.start();
   if (S.tab === "pl" && !canEditSched()) S.tab = "dash";
   if (S.tab === "tr" && !canTraining()) S.tab = "dash";
+  if (isCamo() && !["cm", "ak"].includes(S.tab)) S.tab = "cm";
   const head = `<div class="cn"><span class="cb">AviaDoX</span><span>🏢 ${esc(S.company.name)}</span></div><div class="top"><button class="hb" onclick="S.menu=1;render()">☰</button><div style="flex:1"><h1>${TITLES[S.tab]}</h1><div class="mu">Hoş geldin, ${esc(S.profile.full_name || S.user.email)}${isMgr() ? " · " + ROLE_NAMES[myRole()] : ""}</div></div><button class="sec" onclick="logout()">Çıkış</button></div>`;
   let b = "";
   if (S.tab === "dash") b = dashView();
@@ -371,6 +377,7 @@ function render() {
   else if (S.tab === "fl") b = '<div id="flhost"></div>';
   else if (S.tab === "wx") b = '<div id="wxhost"></div>';
   else if (S.tab === "sm") b = '<div id="smhost"></div>';
+  else if (S.tab === "cm") b = cmView();
   else if (S.tab === "tr") b = trView();
   else if (S.tab === "ak") b = setView();
   else b = docView();
@@ -557,6 +564,74 @@ function bkView() {
   const chips = tabChips([["per", "Periyodik bakım"], ["bal", "Balonlar"], ["mon", "Aylık bakım çizelgesi"], ["camo", "🤝 Anlaşmalı CAMO"]], S.bk, "S.bk");
   return `<div style="margin-top:14px">${chips}${S.bk === "per" ? perView() : S.bk === "bal" ? balListView() : S.bk === "camo" ? camoView() : monView()}</div>`;
 }
+/* ---------- Balon evrakları (balon başına) + CAMO yöneticisi görünümü ---------- */
+const BDOC_TYPES = ["Balon sigortası", "Azot tüpleri manometre kalibrasyonu", "Balon logbook kapak ve son uçuş sayfası", "Tescil sertifikası", "Uçuşa elverişlilik sertifikası", "Uçuşa elverişlilik gözden geçirme sertifikası", "İşletme şartları", "İşletme ruhsatı", "Hava bandı telsiz ruhsatı", "Yakıt tankı bakım raporları"];
+function bdocCard(b, ad) {
+  const all = (S.bdocs || []).filter(x => x.b === b.id);
+  const rows = BDOC_TYPES.map((t, i) => { const fs = all.filter(x => x.t === t), bad = fs.some(x => x.d && st(x.d)[0] === "er");
+    return `<details style="border-top:1px solid var(--bd);padding:8px 0"><summary style="cursor:pointer"><span>${esc(t)}</span> <span class="badge ${fs.length ? (bad ? "er" : "ok") : "wa"}">${fs.length ? fs.length + " evrak" + (bad ? " ⚠" : "") : "Yok"}</span></summary>
+${fs.map(f => `<div class="row" style="margin-top:8px"><span>📄 ${esc(f.f || "evrak")}${f.d ? `<br><span class="mu">Bitiş: ${esc(f.d)}</span>` : ""}</span><span><button class="sec" style="width:auto;margin:0 4px 0 0;padding:6px 10px" onclick="run(()=>openPath('${f.path}'))">Aç</button>${ad ? `<button class="sec" style="width:auto;margin:0;padding:6px 10px" onclick="run(()=>delBdoc('${f.id}'))">Sil</button>` : ""}</span></div>`).join("") || '<div class="mu" style="margin-top:6px">Henüz evrak yüklenmemiş.</div>'}
+${ad ? `<div style="margin-top:10px"><label class="mu">Bitiş tarihi (isteğe bağlı)</label><input id="bd-d-${b.id}-${i}" type="date"><input id="bd-f-${b.id}-${i}" type="file" accept=".pdf,image/*" multiple><button class="sec" onclick="run(()=>upBdoc('${b.id}',${i}))">Yükle</button></div>` : ""}</details>`; }).join("");
+  return `<div class="card"><b>📁 Balon evrakları</b><div class="mu" style="margin:4px 0 6px">${ad ? "Bu balona ait evrakları türüne göre yükleyin." : "Bu balona ait evraklar."}${ad && b.camo ? " Anlaşmalı CAMO bu evrakları görebilir." : ""}</div>${rows}</div>`;
+}
+async function openPath(path) {
+  const w = window.open("about:blank", "_blank");
+  try {
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 300);
+    if (error) throw error;
+    if (w) w.location.href = data.signedUrl; else location.href = data.signedUrl;
+  } catch (e) { if (w) w.close(); throw e; }
+}
+async function upBdoc(bid, i) {
+  if (!canEditMaint()) return;
+  const el = document.getElementById(`bd-f-${bid}-${i}`), fs = el && el.files ? [...el.files] : [], d = val(`bd-d-${bid}-${i}`) || null;
+  if (!fs.length) return alert("Lütfen dosya seçin.");
+  for (const f of fs) {
+    if (f.size > 45e6) { alert(f.name + ": dosya en fazla 45 MB olabilir."); continue; }
+    const path = `${S.co}/balloons/${uuid()}.${extOf(f.name)}`;
+    const { error: e1 } = await sb.storage.from(BUCKET).upload(path, f, { contentType: f.type || "application/octet-stream" });
+    if (e1) throw e1;
+    const { data, error } = await sb.from("balloon_docs").insert({ company_id: S.co, balloon_id: bid, doc_type: BDOC_TYPES[i], expires_on: d, file_path: path, file_name: f.name, uploaded_by: S.user.id }).select().single();
+    if (error) { sb.storage.from(BUCKET).remove([path]).catch(() => {}); throw error; }
+    S.bdocs.push({ id: data.id, b: bid, t: data.doc_type, d: data.expires_on, f: f.name, path });
+  }
+  render(); toast("Evrak yüklendi");
+}
+async function delBdoc(id) {
+  const x = (S.bdocs || []).find(v => v.id === id); if (!x || !canEditMaint() || !confirm("Bu evrak silinsin mi? Geri alınamaz.")) return;
+  const { error } = await sb.from("balloon_docs").delete().eq("id", id); if (error) throw error;
+  sb.storage.from(BUCKET).remove([x.path]).catch(() => {});
+  S.bdocs = S.bdocs.filter(v => v.id !== id); render(); toast("Evrak silindi");
+}
+function cmView() {
+  const mine = camoName(S.profile.camo);
+  const cos = (S.camoCos || []).filter(c => S.balloons.some(b => b.co === c.id));
+  const head = `<div class="mu" style="margin:14px 0 6px">${esc(mine)} · anlaşmalı olduğunuz şirketler</div>`;
+  if (S.cmBal) {
+    const b = S.balloons.find(x => x.id === S.cmBal);
+    if (b) {
+      const co = (S.camoCos || []).find(c => c.id === b.co), n = bkInfo(b), ml = (S.mlogs || []).filter(m => m.b === b.id);
+      const info = [["Balon marka adı", b.br], ["Balon tip / model", b.md], ["Isı sensörü kodu", b.ts], ["Yakıt tankı seri numaraları", b.ft], ["Burner seri numarası", b.bu]];
+      return `<div style="margin-top:14px"><button class="sec" onclick="S.cmBal=null;render()">‹ ${esc(co ? co.name : "Balonlar")}</button>
+<div class="card"><b style="font-size:18px;display:flex;align-items:center">${BI(28)}${esc(b.r)}</b><div class="mu" style="margin-top:4px">Şirket: ${esc(co ? co.name : "-")}</div>
+<div class="row" style="margin-top:8px"><span>Güncel toplam uçuş saati</span><b>${b.t} sa</b></div>
+<div class="row" style="margin-top:6px"><span>100 saatlik bakıma kalan</span><b>${n.h} saat</b></div>
+<div class="row" style="margin-top:6px"><span>Bu bakımdan beri</span><b>${b.h} sa</b></div>
+<div class="row" style="margin-top:6px"><span>Son bakım tarihi</span><b>${b.lm ? esc(b.lm) : "-"}</b></div></div>
+<div class="card"><b>📋 Balon bilgileri</b><div style="height:6px"></div>${info.map(x => `<div style="margin:8px 0"><div class="mu">${x[0]}</div><div>${x[1] ? esc(x[1]).replace(/\n/g, "<br>") : "-"}</div></div>`).join("")}</div>
+${ml.length ? `<div class="card"><b>🔧 Bakım kayıtları</b>${ml.slice(0, 30).map(m => `<div style="border-top:1px solid var(--bd);padding:8px 0"><div>${esc(m.w)}</div><div class="mu">${esc(m.d)} · ${m.k === "corrective" ? "Düzeltici" : "Önleyici"}</div></div>`).join("")}</div>` : ""}
+${bdocCard(b, false)}</div>`;
+    }
+    S.cmBal = null;
+  }
+  if (S.cmCo) {
+    const co = cos.find(c => c.id === S.cmCo), bs = S.balloons.filter(b => b.co === S.cmCo);
+    if (co) return `<div style="margin-top:14px"><button class="sec" onclick="S.cmCo=null;render()">‹ Şirketler</button><h2>${esc(co.name)}</h2><div class="mu" style="margin-bottom:8px">${esc(mine)} ile anlaşmalı balonlar</div>
+${bs.map(b => { const n = bkInfo(b); return `<div class="card" style="cursor:pointer" onclick="S.cmBal='${b.id}';render()"><div class="row"><b style="display:flex;align-items:center">${BI(22)}${esc(b.r)} ›</b><span class="mu">${esc([b.br, b.md].filter(Boolean).join(" "))}</span></div><div class="mu" style="margin-top:4px">Toplam ${b.t} sa · 100 saatlik bakıma ${n.h} sa kaldı</div></div>`; }).join("")}</div>`;
+    S.cmCo = null;
+  }
+  return `<div style="margin-top:14px">${head}${cos.map(c => { const k = S.balloons.filter(b => b.co === c.id).length; return `<div class="card" style="cursor:pointer" onclick="S.cmCo='${c.id}';render()"><div class="row"><b>🏢 ${esc(c.name)} ›</b><span class="mu">${k} balon</span></div></div>`; }).join("") || '<p class="mu">Henüz sizinle anlaşmalı balon yok. Balon işletmeleri balonlarına sizi CAMO olarak atadığında burada görünür.</p>'}</div>`;
+}
 function camoView() {
   const ad = canEditMaint();
   const cards = CAMOS.map(([id, nm]) => { const bs = S.balloons.filter(b => b.camo === id);
@@ -627,6 +702,7 @@ function balView() {
 <button class="sec" onclick="run(()=>done100('${b.id}'))">100 saatlik bakım yapıldı</button>
 <button class="sec" onclick="run(()=>doneY('${b.id}'))">Yıllık bakım yapıldı (+1 yıl)</button></div>
 <div class="card"><b>📋 Balon bilgileri</b><div style="height:6px"></div>${info.map(x => `<div style="margin:8px 0"><div class="mu">${x[0]}</div><div>${x[1] ? esc(x[1]).replace(/\n/g, "<br>") : "-"}</div></div>`).join("")}</div>
+${bdocCard(b, ad)}
 ${ad ? `<details class="card"><summary><b>✏️ Bilgileri düzenle (yönetici)</b></summary><div style="height:10px"></div>
 <label class="mu">Tescil</label><input id="er" value="${esc(b.r)}">
 <label class="mu">Güncel toplam uçuş saati</label><input id="et" type="number" min="0" step="0.1" value="${b.t}">
@@ -778,7 +854,10 @@ async function addB() {
 }
 async function delB(id) {
   const b = S.balloons.find(x => x.id === id); if (!canEditMaint() || !b || !confirm(b.r + " balonu listeden çıkarılsın mı?")) return;
+  const bps = (S.bdocs || []).filter(x => x.b === id).map(x => x.path);
   const { error } = await sb.from("balloons").delete().eq("id", id); if (error) throw error;
+  if (bps.length) sb.storage.from(BUCKET).remove(bps).catch(() => {});
+  S.bdocs = (S.bdocs || []).filter(x => x.b !== id);
   S.balloons = S.balloons.filter(x => x.id !== id); S.bal = null; render();
 }
 async function patchBalloon(id, fields, local) {

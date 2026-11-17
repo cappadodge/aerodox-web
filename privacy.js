@@ -28,6 +28,7 @@ const PRIV_DOC = {
     { h: "5. Verileriniz kimlerle paylaşılır?", p: [
       "Verilerinizi satmayız. Reklam veya davranış izleme araçları kullanmayız.",
       "Şirketiniz içinde: şirket yöneticisi personel evraklarınıza ve çizelgenize erişir; normal kullanıcılar yalnızca kendi personel evraklarını görür.",
+      "Anlaşmalı CAMO: bir balona anlaşmalı CAMO atandığında, o balonun bilgileri, bakım saatleri, seri numaraları ve balon evrakları atanan kuruluşun (Kapadokya Balon Bakım Merkezi veya Kapadokya Havacılık Teknolojileri Merkezi) yöneticisine gösterilir. Personel verileriniz paylaşılmaz.",
       "Hizmet sağlayıcılar:" ], ul: [
       "Supabase: kimlik doğrulama, veritabanı ve özel dosya depolama (sunucu bölgesi: {{BOLGE}} — Türkiye dışı).",
       "GitHub Pages (ABD): web uygulamasının barındırılması.",
@@ -84,6 +85,7 @@ const PRIV_DOC_EN = {
     { h: "5. Who is your data shared with?", p: [
       "We do not sell your data. We do not use advertising or behavioral tracking tools.",
       "Within your company: the company admin can access your staff documents and schedule; regular users see only their own staff documents.",
+      "Contracted CAMO: when a contracted CAMO is assigned to a balloon, that balloon's information, maintenance hours, serial numbers and balloon documents are shown to the admin of the assigned organization (Cappadocia Balloon Maintenance Center or Cappadocia Aviation Technologies Center). Your staff data is not shared.",
       "Service providers:" ], ul: [
       "Supabase: authentication, database and private file storage (server region: {{BOLGE}} — outside Türkiye).",
       "GitHub Pages (USA): hosting of the web application.",
@@ -139,7 +141,7 @@ const AYD_DOC = {
       "Verileriniz, uygulamaya kayıt olurken ve kullanırken sizin, şirket yöneticilerinizin veya kalite yöneticisinin girdiği bilgiler ile cihazınızın konum sensörü aracılığıyla elektronik ortamda toplanır.",
       "Hukuki sebepler (KVKK m.5/2 ve m.6): sözleşmenin kurulması ve ifası; hukuki yükümlülüğün yerine getirilmesi; veri sorumlusunun meşru menfaati; bir hakkın tesisi, kullanılması veya korunması. Konum, sağlık verisi ve yurt dışına aktarım için ayrıca Açık Rıza Beyanı ile açık rızanız istenir." ] },
     { h: "5. Verilerin aktarılması", p: [
-      "Yurt içinde: şirketinizin yöneticileri, rolleri kapsamında personel evraklarınıza ve çizelgenize erişir; yetkili kamu kurum ve kuruluşları (ör. SHGM) yasal talep halinde.",
+      "Yurt içinde: şirketinizin yöneticileri, rolleri kapsamında personel evraklarınıza ve çizelgenize erişir; yetkili kamu kurum ve kuruluşları (ör. SHGM) yasal talep halinde; balonlarınıza atadığınız anlaşmalı CAMO kuruluşunun yöneticisi, o balonların bilgilerine, bakım saatlerine ve evraklarına (personel verilerine değil).",
       "YURT DIŞINDA SAKLANAN VERİLER: Verileriniz Türkiye dışındaki sunucularda saklanmakta ve işlenmektedir. Veritabanı, kimlik doğrulama ve dosya depolama: Supabase (sunucu bölgesi: {{BOLGE}}). Web uygulaması barındırma: GitHub Pages (ABD). Alan adı ve e-posta yönlendirme: Cloudflare (ABD). Harita karoları: Esri (ABD). Hava durumu: Open-Meteo. Bildirimler: Google/Apple/Mozilla bildirim servisleri (ABD).",
       "Bu aktarım KVKK m.9 kapsamındadır. Aktarım, hizmetin sunulması için gerekli olduğu ölçüde ve m.9'da öngörülen uygun güvencelerle yapılır; ayrıca Açık Rıza Beyanı ile açık rızanız istenir. Yeterlilik kararı bulunmayan ülkelere aktarımlarda standart sözleşme gibi güvenceler esas alınır." ] },
     { h: "6. Saklama süresi", ul: [
@@ -175,7 +177,7 @@ const AYD_DOC_EN = {
       "Your data is collected electronically from information entered by you, your company admins or the quality manager when registering and using the app, and via your device's location sensor.",
       "Legal bases (KVKK Art. 5/2 and 6): establishment and performance of a contract; compliance with a legal obligation; the controller's legitimate interest; establishment, exercise or protection of a right. For location, health data and transfer abroad, your explicit consent is additionally requested through the Explicit Consent Statement." ] },
     { h: "5. Transfer of data", p: [
-      "In Türkiye: admins of your company, within their roles, access your staff documents and schedule; competent public authorities (e.g. SHGM) upon legal request.",
+      "In Türkiye: admins of your company, within their roles, access your staff documents and schedule; competent public authorities (e.g. SHGM) upon legal request; the admin of the contracted CAMO assigned to your balloons, for those balloons' information, maintenance hours and documents (not staff data).",
       "DATA STORED ABROAD: Your data is stored and processed on servers outside Türkiye. Database, authentication and file storage: Supabase (server region: {{BOLGE}}). Web app hosting: GitHub Pages (USA). Domain and email forwarding: Cloudflare (USA). Map tiles: Esri (USA). Weather: Open-Meteo. Notifications: Google/Apple/Mozilla push services (USA).",
       "This transfer falls under Article 9 of the KVKK. It is made only to the extent necessary to provide the service and with the appropriate safeguards set out in Article 9; in addition your explicit consent is requested through the Explicit Consent Statement. For transfers to countries without an adequacy decision, safeguards such as standard contracts are relied upon." ] },
     { h: "6. Retention", ul: [
