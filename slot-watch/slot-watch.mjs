@@ -48,4 +48,19 @@ async function main() {
   for (const id of gone) await fetch(`${SUPABASE_URL}/rest/v1/push_subs?id=eq.${id}`, { method: "DELETE", headers: H });
   console.log(`Bildirim: ${ok} gönderildi, ${gone.length} geçersiz abonelik silindi`);
 }
-if (process.argv[1] && process.argv[1].endsWith("slot-watch.mjs")) main().catch(e => { console.error(e); process.exit(1); });
+/* Yoğun pencere modu: WINDOW_END (örn. "07:50", Türkiye saati) verilirse iş, o saate kadar
+   her POLL_SECONDS saniyede (varsayılan 180 = 3 dk) sayfayı yeniden okur. */
+const trMinutes = () => { const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date()); return Number(p.find(x => x.type === "hour").value) % 24 * 60 + Number(p.find(x => x.type === "minute").value); };
+async function loop() {
+  const [h, m] = process.env.WINDOW_END.split(":").map(Number), end = h * 60 + m, every = (Number(process.env.POLL_SECONDS) || 180) * 1000;
+  let fails = 0, n = 0;
+  while (trMinutes() < end) {
+    const t0 = Date.now(); n++;
+    try { await main(); fails = 0; } catch (e) { fails++; console.error("Tur " + n + " hata:", e.message); if (fails >= 10) throw e; }
+    const wait = every - (Date.now() - t0);
+    if (trMinutes() >= end) break;
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+  }
+  console.log("Pencere bitti (" + process.env.WINDOW_END + " TSİ). Toplam tur: " + n);
+}
+if (process.argv[1] && process.argv[1].endsWith("slot-watch.mjs")) (process.env.WINDOW_END ? loop() : main()).catch(e => { console.error(e); process.exit(1); });
