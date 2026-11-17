@@ -126,11 +126,22 @@ function loginView(msg) {
 <p class="mu" style="text-align:center;margin:2px 0 24px">Balon operasyonları için evrak ve uçuş takibi</p>
 <input id="u" placeholder="Kullanıcı adı" autocapitalize="none" autocorrect="off" autocomplete="username" value="${esc(val("u"))}">
 <input id="p" type="password" placeholder="Parola" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button><button class="sec" onclick="signupView()">Hesabın yok mu? Kayıt ol</button><p style="text-align:center;margin-top:14px"><a href="#" onclick="privPage(loginView);return false">Gizlilik Politikası</a></p>${I18N.controls(true)}</div>`);
+<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doLogin()">Giriş Yap</button><button class="sec" onclick="signupView()">Hesabın yok mu? Kayıt ol</button><p style="text-align:center;margin-top:14px"><a href="#" onclick="privPage(loginView,'pol');return false">Gizlilik Politikası</a> · <a href="#" onclick="privPage(loginView,'ayd');return false">Aydınlatma Metni</a> · <a href="#" onclick="privPage(loginView,'riza');return false">Açık Rıza</a></p>${I18N.controls(true)}</div>`);
 }
-function privPage(back) {
+const consentBlock = back => `<label style="display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14px"><input id="ck-a" type="checkbox" style="width:auto;margin:3px 0 0"><span><b>Okudum, anladım:</b> <a href="#" onclick="privPage(${back},'ayd');return false">KVKK Aydınlatma Metni</a> ve <a href="#" onclick="privPage(${back},'pol');return false">Gizlilik Politikası</a> metinlerini okudum, anladım.</span></label>
+<div class="mu" style="margin:10px 0 2px"><a href="#" onclick="privPage(${back},'riza');return false">Açık Rıza Beyanı</a> — aşağıdaki her rıza ayrıdır:</div>
+<label style="display:flex;gap:10px;align-items:flex-start;margin:6px 0;font-size:14px"><input id="ck-x" type="checkbox" style="width:auto;margin:3px 0 0"><span><b>Açık rıza 1:</b> Verilerimin Türkiye dışındaki sunucularda saklanmasına ve yurt dışındaki hizmet sağlayıcılara aktarılmasına açık rıza veriyorum.</span></label>
+<label style="display:flex;gap:10px;align-items:flex-start;margin:6px 0;font-size:14px"><input id="ck-h" type="checkbox" style="width:auto;margin:3px 0 0"><span><b>Açık rıza 2:</b> Sağlık sertifikası gibi sağlık verisi niteliğindeki belgelerimin işletme yöneticileri tarafından yüklenip işlenmesine açık rıza veriyorum.</span></label>`;
+function consentOk() {
+  const g = id => { const e = document.getElementById(id); return e && e.checked; };
+  if (!g("ck-a")) return "Devam etmek için Aydınlatma Metni ve Gizlilik Politikası'nı okuduğunuzu işaretleyin.";
+  if (!g("ck-x")) return "Devam etmek için yurt dışına aktarım için açık rıza (Açık rıza 1) vermelisiniz.";
+  if (!g("ck-h")) return "Devam etmek için özel nitelikli veri için açık rıza (Açık rıza 2) vermelisiniz.";
+  return "";
+}
+function privPage(back, kind) {
   const f = typeof back === "function" ? back : null;
-  $(`<div class="wrap" style="padding-bottom:40px"><button class="sec" style="width:auto" onclick="${f ? "(" + f.name + ")()" : "render()"}">‹ Geri</button><div style="margin-top:8px">${privHtml()}</div></div>`);
+  $(`<div class="wrap" style="padding-bottom:40px"><button class="sec" style="width:auto" onclick="${f ? "(" + f.name + ")()" : "render()"}">‹ Geri</button><div style="margin-top:8px">${privHtml(kind)}</div></div>`);
 }
 async function loadCompanyList() {
   try {
@@ -150,14 +161,14 @@ function signupView(msg) {
 <input id="su" placeholder="Kullanıcı adı (küçük harf, rakam, . _ -)" autocapitalize="none" autocorrect="off" autocomplete="username" value="${esc(val("su"))}">
 <input id="sp1" type="password" placeholder="Parola (en az 8 karakter)" autocomplete="new-password">
 <input id="sp2" type="password" placeholder="Parola (tekrar)" autocomplete="new-password" onkeydown="if(event.key==='Enter')doSignup()">
-<label style="display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14px"><input id="sk" type="checkbox" style="width:auto;margin:3px 0 0"><span><a href="#" onclick="privPage(signupView);return false">Gizlilik Politikası ve KVKK Aydınlatma Metni</a>'ni okudum, kabul ediyorum.</span></label><div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doSignup()">Kayıt ol</button><button class="sec" onclick="loginView()">‹ Girişe dön</button></div>`);
+${consentBlock("signupView")}<div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doSignup()">Kayıt ol</button><button class="sec" onclick="loginView()">‹ Girişe dön</button></div>`);
   loadCompanyList();
 }
 async function doSignup() {
   const fn = val("sn").trim().replace(/\s+/g, " "), cn = val("sc").trim().replace(/\s+/g, " "), un = val("su").trim().toLowerCase(), p1 = val("sp1"), p2 = val("sp2");
   const err = document.getElementById("e"), btn = document.getElementById("lb");
   if (!fn || !cn || !un || !p1) { err.textContent = "Tüm alanları doldurun."; return; }
-  if (!document.getElementById("sk") || !document.getElementById("sk").checked) { err.textContent = "Devam etmek için Gizlilik Politikası'nı kabul etmelisiniz."; return; }
+  { const ce = consentOk(); if (ce) { err.textContent = ce; return; } }
   if (!/^[a-z0-9._-]{3,30}$/.test(un)) { err.textContent = "Kullanıcı adı 3-30 karakter olmalı; sadece küçük harf (a-z), rakam ve . _ - kullanın. Türkçe karakter ve boşluk olmaz."; return; }
   if (p1.length < 8) { err.textContent = "Parola en az 8 karakter olmalı."; return; }
   if (p1 !== p2) { err.textContent = "Parolalar aynı değil."; return; }
@@ -171,7 +182,7 @@ async function doSignup() {
   }
   if (!data.session) { btn.disabled = false; btn.textContent = "Kayıt ol"; err.textContent = "Hesap oluşturuldu ama oturum açılamadı. Girişe dönüp deneyin."; return; }
   S.user = data.user;
-  const { error: e2 } = await sb.rpc("request_join", { cname: cn, fname: fn, ver: POLICY_VER() });
+  const { error: e2 } = await sb.rpc("request_join", { cname: cn, fname: fn, ver: POLICY_VER(), xver: POLICY_VER() });
   S.joinErr = e2 ? errMsg(e2) : "";
   await bootWith(data.user);
 }
@@ -224,16 +235,15 @@ function offlineView(msg, user) {
 function consentView(msg) {
   $(`<div class="wrap login"><div class="logo">${AERO(72)}</div><div class="wm"><span>Avia</span><b>DoX</b></div>
 <h2 style="text-align:center">Gizlilik ve KVKK Onayı</h2>
-<p class="mu" style="text-align:center">Devam etmeden önce Gizlilik Politikası ve KVKK Aydınlatma Metni'ni okuyup kabul etmeniz gerekir. Uygulama hesap bilgilerinizi, personel evraklarınızı ve (yalnızca Flight Log'da Start ile Stop arasında) konumunuzu işler.</p>
-<button class="sec" onclick="privPage(consentView)">Gizlilik Politikası ve KVKK Aydınlatma Metni'ni oku</button>
-<label style="display:flex;gap:10px;align-items:flex-start;margin:10px 0;font-size:14px"><input id="ck" type="checkbox" style="width:auto;margin:3px 0 0"><span>Gizlilik Politikası ve KVKK Aydınlatma Metni'ni okudum, kabul ediyorum.</span></label>
+<p class="mu" style="text-align:center">Devam etmeden önce Aydınlatma Metni'ni ve Gizlilik Politikası'nı okuduğunuzu onaylamanız ve açık rızalarınızı ayrı ayrı vermeniz gerekir. Uygulama hesap bilgilerinizi, personel evraklarınızı ve (yalnızca Flight Log'da Start ile Stop arasında) konumunuzu işler.</p>
+${consentBlock("consentView")}
 <div class="err" id="e">${esc(msg || "")}</div><button id="lb" onclick="doConsent()">Kabul ediyorum ve devam et</button><button class="sec" onclick="logout()">Kabul etmiyorum (çıkış)</button></div>`);
 }
 async function doConsent() {
-  const ck = document.getElementById("ck"), err = document.getElementById("e"), btn = document.getElementById("lb");
-  if (!ck || !ck.checked) { err.textContent = "Devam etmek için Gizlilik Politikası'nı kabul etmelisiniz."; return; }
+  const err = document.getElementById("e"), btn = document.getElementById("lb");
+  const ce = consentOk(); if (ce) { err.textContent = ce; return; }
   btn.disabled = true;
-  const { error } = await sb.rpc("accept_privacy", { ver: POLICY_VER(), loc: false });
+  const { error } = await sb.rpc("accept_privacy", { ver: POLICY_VER(), loc: false, expl: true });
   if (error) { btn.disabled = false; err.textContent = errMsg(error); return; }
   await bootWith(S.user);
 }
@@ -251,7 +261,7 @@ async function boot(user) {
   const { data: co, error: e2 } = await sb.from("companies").select("*").eq("id", S.co).single();
   if (e2) throw e2;
   S.company = co;
-  if ("consent_version" in pr && pr.consent_version !== POLICY_VER()) { consentView(); return; }
+  if ("consent_version" in pr && ("explicit_version" in pr ? (pr.consent_version !== POLICY_VER() || pr.explicit_version !== POLICY_VER()) : pr.consent_version !== POLICY_VER())) { consentView(); return; }
   await loadAll();
   await loadLogo();
   await loadAvatar().catch(() => {});
@@ -690,7 +700,7 @@ function setView() {
 ${um ? joinCard() + usersCard() : ""}
 ${adm ? `<div class="card"><b>🖼️ Şirket logosu</b><div class="mu" style="margin:4px 0 8px">Panelde görünür. PNG veya JPG, en fazla 2 MB.</div><input id="lg" type="file" accept="image/*"><button onclick="run(setLogo)">Logoyu yükle</button></div>` : ""}
 ${um ? `<div class="card"><b>👤 Yeni kullanıcı ekleme</b><div class="mu" style="margin-top:6px">Çalışanlar giriş ekranında Kayıt ol'a basıp listeden şirketi seçerek başvurur. Yukarıdaki Katılım istekleri bölümünden onaylarsın.</div></div>` : ""}
-<div class="card"><b>🔒 Gizlilik</b><div class="mu" style="margin:6px 0">Hangi verileri neden işlediğimizi ve haklarını okuyabilirsin.</div><button class="sec" onclick="privPage(render)">Gizlilik Politikası</button></div>
+<div class="card"><b>🔒 Gizlilik</b><div class="mu" style="margin:6px 0">Hangi verileri neden işlediğimizi ve haklarını okuyabilirsin.</div><button class="sec" onclick="privPage(render,'pol')">Gizlilik Politikası</button><button class="sec" onclick="privPage(render,'ayd')">KVKK Aydınlatma Metni</button><button class="sec" onclick="privPage(render,'riza')">Açık Rıza Beyanı</button></div>
 <div class="card"><b>🗑 Hesabımı sil</b><div class="mu" style="margin:6px 0">Giriş hesabın, profilin, fotoğrafın ve uçuş kayıtların kalıcı olarak silinir. Geri alınamaz. Personel kaydın ve evraklar işletmeye aittir, yöneticin siler. Şirketin tek yöneticisiysen önce başka birini yönetici yap.</div><input id="dx" placeholder="Onay için SİL yaz" autocapitalize="characters"><button class="x" onclick="run(deleteAccount)">Hesabımı kalıcı olarak sil</button></div>
 <div class="card"><b>ℹ️ Hesap</b><div class="mu" style="margin-top:6px">${esc(S.user.email)}<br>${esc(S.company.name)} · ${esc(ROLE_NAMES[myRole()] || "Kullanıcı")}</div></div></div>`;
 }

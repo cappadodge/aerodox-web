@@ -10,12 +10,15 @@
 </head>
 <body>
 <header>AviaDoX</header>
+<nav id="tabs" style="max-width:760px;margin:0 auto;padding:12px 16px 0;display:flex;gap:8px;flex-wrap:wrap"></nav>
 <main id="m"></main>
 <div id="lgx" style="text-align:center;padding-bottom:30px"></div>
 <script src="config.js"></script>
 <script src="i18n.js"></script>
 <script src="privacy.js"></script>
-<script>document.getElementById("m").innerHTML = privHtml();
+<script>const K = (location.hash || "#pol").slice(1), kinds = [["pol","Gizlilik Politikası"],["ayd","KVKK Aydınlatma Metni"],["riza","Açık Rıza Beyanı"]];
+document.getElementById("tabs").innerHTML = kinds.map(k => '<a href="#' + k[0] + '" onclick="setTimeout(function(){location.reload()},0)" style="padding:6px 12px;border-radius:16px;border:1px solid #0b3d91;text-decoration:none;font-size:14px;' + (k[0]===K ? 'background:#0b3d91;color:#fff' : '') + '">' + k[1] + '</a>').join("");
+document.getElementById("m").innerHTML = privHtml(K);
 document.getElementById("lgx").innerHTML = '<select onchange="I18N.setLang(this.value)"><option value="tr"' + (I18N.lang==="tr"?" selected":"") + '>Türkçe</option><option value="en"' + (I18N.lang==="en"?" selected":"") + '>English</option></select>';</script>
 </body>
 </html>
