@@ -1,11 +1,41 @@
-
 name: slot-watch
 on:
   schedule:
+    # Sabah yoğun pencere: 06:25 TSİ'de başlar (03:25 UTC), 07:50 TSİ'ye kadar her 3 dk'da bir kontrol eder.
+    # GitHub zamanlayıcısı birkaç dk gecikebilir; bu yüzden erken başlar.
+    - cron: "25 3 * * *"
+    # Gün boyu normal kontrol (en sık 5 dk)
     - cron: "*/5 * * * *"
   workflow_dispatch:
+    inputs:
+      window:
+        description: "Yoğun pencere modunu şimdi dene (07:50 TSİ'ye kadar 3 dk'da bir)"
+        type: boolean
+        default: false
 jobs:
+  window:
+    if: github.event.schedule == '25 3 * * *' || (github.event_name == 'workflow_dispatch' && inputs.window)
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Bağımlılıkları kur
+        run: npm install --prefix slot-watch
+      - name: Slot Merkezi'ni 3 dakikada bir izle (07:50 TSİ'ye kadar)
+        run: node slot-watch/slot-watch.mjs
+        env:
+          WINDOW_END: "07:50"
+          POLL_SECONDS: "180"
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PUBLIC: ${{ secrets.VAPID_PUBLIC }}
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
   watch:
+    if: github.event.schedule != '25 3 * * *' && !(github.event_name == 'workflow_dispatch' && inputs.window)
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -13,9 +43,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Bagimliliklari kur
+      - name: Bağımlılıkları kur
         run: npm install --prefix slot-watch
-      - name: Slot Merkezi kontrol
+      - name: Slot Merkezi'ni kontrol et
         run: node slot-watch/slot-watch.mjs
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
