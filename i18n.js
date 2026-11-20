@@ -291,6 +291,8 @@ const I18N = (() => {
     "Yaklaşan eğitimler": "Upcoming trainings",
     "Eğitim güncellendi": "Training updated",
     "· Güne dokunarak o günün eğitimlerini görebilirsiniz.": "· Tap a day to see that day's trainings.",
+    "Mod: yerel uygulama (arka plan konum)": "Mode: native app (background location)",
+    "Mod: web sürümü (ekran açık kalmalı)": "Mode: web version (screen must stay on)",
     "Tür": "Type", "(kaynak:": "(source:", "➕ Bakım kaydı ekle": "➕ Add maintenance record", "Örn. 100 saatlik bakım, burner conta değişimi": "E.g. 100-hour maintenance, burner gasket replacement",
     "yönetici": "admin", "saat": "hours", "gün": "days", "✏️ Bilgileri düzenle (yönetici)": "✏️ Edit info (admin)", "100 saatlik bakımdan beri uçulan saat": "Hours flown since the 100-hour maintenance",
     "(her satıra bir tane)": "(one per line)", "🗑 Balonu çıkar": "🗑 Remove balloon", "Uçuş saati ekle": "Add flight hours", "aylık çizelge": "monthly schedule", "Çalışma süresi (saat)": "Duty time (hours)", "Uçuş süresi (saat)": "Flight time (hours)",
