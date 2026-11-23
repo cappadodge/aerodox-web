@@ -15,9 +15,9 @@ const S = {
 
 const CT = ["İşletme El Kitabı", "İşletme Şartları", "Balon Sigorta Evrakları", "CAO Anlaşmaları", "Balon Telsiz Ruhsatları", "Balon Tescil", "Balon Uçuşa Elverişlilik Evrakları"];
 const PT = ["Dil Yeterlilik Belgesi", "Pilot Lisansı", "Sağlık Sertifikası", "Mezuniyet Diploması", "İlk Yardım Belgesi", "KDM Belgeleri"];
-const ROLES = ["Pilot", "Yer Ekibi", "Rezervasyon", "Diğer"];
-const ROLE_TO_DB = { "Pilot": "pilot", "Yer Ekibi": "ground", "Rezervasyon": "reservation", "Diğer": "other" };
-const ROLE_FROM_DB = { pilot: "Pilot", ground: "Yer Ekibi", reservation: "Rezervasyon", other: "Diğer" };
+const ROLES = ["Pilot", "Co-Pilot", "Yer Ekibi", "Rezervasyon", "Diğer"];
+const ROLE_TO_DB = { "Pilot": "pilot", "Co-Pilot": "copilot", "Yer Ekibi": "ground", "Rezervasyon": "reservation", "Diğer": "other" };
+const ROLE_FROM_DB = { pilot: "Pilot", copilot: "Co-Pilot", ground: "Yer Ekibi", reservation: "Rezervasyon", other: "Diğer" };
 const STATUS_TO_DB = { u: "flew", i: "leave", c: "field_cancel", n: "pre_cancel" };
 const STATUS_FROM_DB = { flew: "u", leave: "i", field_cancel: "c", pre_cancel: "n" };
 const ST = { u: ["✈️", "Uçtu"], i: ["🏖️", "İzinli"], c: ["🚫", "Alana gidildi, iptal"], n: ["❌", "Önceden iptal, alana gidilmedi"] };
@@ -788,11 +788,11 @@ function plView() {
   const m = S.month;
   const rows = S.logs.filter(l => l.d.slice(0, 7) === m).sort((a, b) => b.d.localeCompare(a.d));
   const tot = {}; rows.forEach(l => { const t = tot[l.sid] = tot[l.sid] || { w: 0, f: 0, g: new Set() }; t.w += l.w; t.f += l.f; if (l.s === "u") t.g.add(l.d); });
-  let pil = S.people.filter(x => x.r === "Pilot"); if (!pil.length) pil = S.people;
+  let pil = S.people.filter(x => x.r === "Pilot" || x.r === "Co-Pilot"); if (!pil.length) pil = S.people;
   const sids = [...new Set([...pil.map(x => x.id), ...Object.keys(tot)])];
   const [y, mo] = cur.split("-"), last = String(new Date(y, mo, 0).getDate()).padStart(2, "0"), today = fd(new Date());
-  const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp">${pil.map(x => `<option value="${x.id}">${esc(x.n)}</option>`).join("")}</select><select id="ps"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" min="0" step="any" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
-  const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${r2(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${r2(t.f)}</b><div class="mu">uçuş sa.</div></div></div></div>`; }).join("");
+  const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp" onchange="coSync()">${pil.map(x => `<option value="${x.id}">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</option>`).join("")}</select><select id="ps" onchange="coSync()"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" title="Co-Pilot: uçtuysa 1" min="0" step="any" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
+  const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${r2(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${r2(t.f)}</b><div class="mu">${isCo(sid) ? "uçuş günü (Co-Pilot)" : "uçuş sa."}</div></div></div></div>`; }).join("");
   const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
   return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select><div style="display:flex;gap:8px;margin:14px 0 4px"><button class="${S.plTab !== "w" ? "" : "x"}" onclick="S.plTab=\'f\';render()">✈️ Uçuş saati çizelgesi</button><button class="${S.plTab === "w" ? "" : "x"}" onclick="S.plTab=\'w\';render()">🕓 Çalışma saati çizelgesi</button></div>${grid(m, sids, rows)}${pAdd()}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}</div>`;
 }
@@ -959,12 +959,14 @@ const done100 = async id => { const d = fd(new Date()); await autoLog(id, "100 s
 async function doneY(id) { const d = new Date(); d.setFullYear(d.getFullYear() + 1); const s = fd(d); await autoLog(id, "Yıllık periyodik bakım", fd(new Date())); return patchBalloon(id, { annual_due: s }, { a: s }); }
 const SHIFTS = ["02.00-06.00", "03.00-07.00", "04.00-08.00", "05.00-09.00", "06.00-10.00"];
 function shiftPick(v) { if (!v) return; const [a, b] = v.split("-").map(x => parseFloat(x)); const w = document.getElementById("pw"); if (w) w.value = b - a; }
+const isCo = sid => { const x = S.people.find(p => p.id === sid); return !!x && x.r === "Co-Pilot"; };
+function coSync() { const f = document.getElementById("pf"); if (!f) return; const co = isCo(val("pp")) && val("ps") === "u"; f.style.display = co ? "none" : ""; if (co) f.value = 1; }
 async function addL() {
   const d = val("pd"), sid = val("pp"), s = val("ps"), sh = (s === "i" || s === "n") ? "" : val("psh");
-  const w = (s === "i" || s === "n") ? 0 : (parseFloat(val("pw")) || 0), f = s === "u" ? (parseFloat(val("pf")) || 0) : 0;
+  const w = (s === "i" || s === "n") ? 0 : (parseFloat(val("pw")) || 0), f = s === "u" ? (isCo(sid) ? 1 : (parseFloat(val("pf")) || 0)) : 0;
   if (!sid) return alert("Önce pilot ekleyin.");
   if (!d || (s === "u" && !(f > 0))) return alert("Tarih ve uçuş saatini girin.");
-  if (f > w) return alert("Uçuş saati çalışma saatinden büyük olamaz.");
+  if (!isCo(sid) && f > w) return alert("Uçuş saati çalışma saatinden büyük olamaz.");
   if (s === "u" || s === "c") {
     const n = wc(sid, mon(d), d), p = nm(sid);
     if (n > 6 && !confirm(p + " bu hafta " + n + ". gününe girecek. Haftalık 6 gün limiti aşılıyor, yine de kaydedilsin mi?")) return;
