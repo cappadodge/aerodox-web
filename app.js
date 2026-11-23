@@ -97,7 +97,7 @@ async function loadAll() {
   ]);
   S.bdocs = bd.map(x => ({ id: x.id, b: x.balloon_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
   S.camoCos = cc;
-  S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null }));
+  S.allStaff = st.map(x => ({ id: x.id, n: x.full_name, r: ROLE_FROM_DB[x.job_title] || "Diğer", on: x.active !== false, u: x.user_id || null, o: x.sort_order == null ? 9999 : Number(x.sort_order) }));
   S.profiles = pf; S.joins = jr; S.mlogs = ml.map(mapM);
   S.people = S.allStaff.filter(x => x.on);
   S.docs = dc.filter(x => x.scope !== "company" || CT.includes(x.doc_type)).map(x => ({ id: x.id, k: x.scope === "company" ? "co" : "pe", sid: x.staff_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
@@ -789,13 +789,15 @@ function plView() {
   const rows = S.logs.filter(l => l.d.slice(0, 7) === m).sort((a, b) => b.d.localeCompare(a.d));
   const tot = {}; rows.forEach(l => { const t = tot[l.sid] = tot[l.sid] || { w: 0, f: 0, g: new Set() }; t.w += l.w; t.f += l.f; if (l.s === "u") t.g.add(l.d); });
   let pil = S.people.filter(x => x.r === "Pilot" || x.r === "Co-Pilot"); if (!pil.length) pil = S.people;
-  const sids = [...new Set([...pil.map(x => x.id), ...Object.keys(tot)])];
+  const ord = id => { const x = S.allStaff.find(p => p.id === id); return x ? x.o : 99999; };
+  const sids = [...new Set([...pil.map(x => x.id), ...Object.keys(tot)])].sort((a, b) => ord(a) - ord(b));
+  const ordCard = canEditCo() ? `<details class="card"><summary><b>↕ Çizelge isim sırası</b></summary><div style="height:8px"></div>${sids.map((id, i) => `<div class="row" style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="flex:1">${i + 1}. ${esc(nm(id))}</span><button class="sec" style="width:auto;margin:0;padding:4px 12px" ${i ? "" : "disabled"} onclick="run(()=>moveP('${id}',-1))">▲</button><button class="sec" style="width:auto;margin:0;padding:4px 12px" ${i < sids.length - 1 ? "" : "disabled"} onclick="run(()=>moveP('${id}',1))">▼</button></div>`).join("")}</details>` : "";
   const [y, mo] = cur.split("-"), last = String(new Date(y, mo, 0).getDate()).padStart(2, "0"), today = fd(new Date());
   const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp" onchange="coSync()">${pil.map(x => `<option value="${x.id}">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</option>`).join("")}</select><select id="ps" onchange="coSync()"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" title="Co-Pilot: uçtuysa 1" min="0" step="any" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
   const bulk = `<details class="card"><summary><b>🗓 Toplu işaretle (izin / iptal)</b></summary><div style="height:8px"></div><div class="mu">Başlangıç - bitiş tarihi</div><input id="bd1" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><input id="bd2" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="bs"><option value="i">🏖️ İzinli</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option><option value="c">🚫 Alana gidildi, uçuş iptal</option></select><div style="margin:8px 0">${pil.map(x => `<label style="display:block;padding:3px 0"><input type="checkbox" class="bp" value="${x.id}" checked style="width:auto;margin-right:8px">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</label>`).join("")}</div><button onclick="run(bulkMark)">Seçililere uygula</button></details>`;
   const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${r2(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${r2(t.f)}</b><div class="mu">${isCo(sid) ? "uçuş günü (Co-Pilot)" : "uçuş sa."}</div></div></div></div>`; }).join("");
   const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed && canEditSched() ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
-  return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select><div style="display:flex;gap:8px;margin:14px 0 4px"><button class="${S.plTab !== "w" ? "" : "x"}" onclick="S.plTab=\'f\';render()">✈️ Uçuş saati çizelgesi</button><button class="${S.plTab === "w" ? "" : "x"}" onclick="S.plTab=\'w\';render()">🕓 Çalışma saati çizelgesi</button></div>${grid(m, sids, rows)}${pAdd()}${ed && canEditSched() ? bulk : ''}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}</div>`;
+  return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select><div style="display:flex;gap:8px;margin:14px 0 4px"><button class="${S.plTab !== "w" ? "" : "x"}" onclick="S.plTab=\'f\';render()">✈️ Uçuş saati çizelgesi</button><button class="${S.plTab === "w" ? "" : "x"}" onclick="S.plTab=\'w\';render()">🕓 Çalışma saati çizelgesi</button></div>${grid(m, sids, rows)}${pAdd()}${ordCard}${ed && canEditSched() ? bulk : ''}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}</div>`;
 }
 function joinCard() {
   const rows = (S.joins || []).map(j => `<div class="card" style="margin:8px 0"><b>${esc(j.full_name)}</b><div class="mu">Kullanıcı adı: ${esc(j.username || "")} · ${esc((j.created_at || "").slice(0, 10))}</div><select id="jb${j.id}"><option value="">Personel kaydı oluşturma</option>${ROLES.map(r => `<option>${r}</option>`).join("")}</select><button onclick="run(()=>approveJ('${j.id}'))">Onayla</button><button class="x" onclick="run(()=>rejectJ('${j.id}'))">Reddet</button></div>`).join("");
@@ -966,6 +968,15 @@ async function setRole() {
   const id = val("rp"), r = val("rr"), x = S.people.find(p => p.id === id); if (!x) return;
   const { error } = await sb.from("staff").update({ job_title: ROLE_TO_DB[r] || "other" }).eq("id", id); if (error) throw error;
   x.r = r; const a = S.allStaff.find(p => p.id === id); if (a) a.r = r; render();
+}
+async function moveP(id, dir) {
+  if (!canEditCo()) return;
+  const cur = S.month, ids = [...new Set(S.logs.filter(l => l.d.slice(0, 7) === cur).map(l => l.sid).concat(S.people.filter(x => x.r === "Pilot" || x.r === "Co-Pilot").map(x => x.id)))];
+  const o = id2 => { const x = S.allStaff.find(p => p.id === id2); return x ? x.o : 99999; };
+  ids.sort((a, b) => o(a) - o(b)); const i = ids.indexOf(id), j = i + dir; if (i < 0 || j < 0 || j >= ids.length) return;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  for (let k = 0; k < ids.length; k++) { const x = S.allStaff.find(p => p.id === ids[k]); if (x && x.o !== k + 1) { const { error } = await sb.from("staff").update({ sort_order: k + 1 }).eq("id", ids[k]); if (error) throw error; x.o = k + 1; } }
+  render();
 }
 async function insLog(d, sid, s, w, f, sh) {
   const { data, error } = await sb.from("duty_logs").insert({ company_id: S.co, staff_id: sid, log_date: d, status: STATUS_TO_DB[s], duty_hours: w, flight_hours: f, ...(sh ? { shift: sh } : {}) }).select().single();
