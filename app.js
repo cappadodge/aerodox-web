@@ -102,7 +102,7 @@ async function loadAll() {
   S.people = S.allStaff.filter(x => x.on);
   S.docs = dc.filter(x => x.scope !== "company" || CT.includes(x.doc_type)).map(x => ({ id: x.id, k: x.scope === "company" ? "co" : "pe", sid: x.staff_id, t: x.doc_type, d: x.expires_on, f: x.file_name || "", path: x.file_path }));
   S.balloons = bl.map(mapB);
-  S.logs = lg.map(x => ({ id: x.id, d: x.log_date, sid: x.staff_id, w: Number(x.duty_hours) || 0, f: Number(x.flight_hours) || 0, s: STATUS_FROM_DB[x.status] || "u" }));
+  S.logs = lg.map(x => ({ id: x.id, d: x.log_date, sid: x.staff_id, w: Number(x.duty_hours) || 0, f: Number(x.flight_hours) || 0, sh: x.shift || "", s: STATUS_FROM_DB[x.status] || "u" }));
   if (S.person >= S.people.length) S.person = 0;
 }
 async function loadAvatar() {
@@ -777,7 +777,7 @@ function grid(m, sids, rows) {
   const days = Array.from({ length: n }, (_, i) => i + 1), tt = {};
   rows.forEach(l => { const t = tt[l.sid] = tt[l.sid] || { f: 0, w: 0 }; t.f += l.f; t.w += l.w; });
   const tc = 'style="text-align:center;font-weight:700;white-space:nowrap;padding:4px 8px"';
-  return `<h2>${mn(m)} aylık çizelge</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>Uçuş saati toplamı</th><th ${tc}>Çalışma saati toplamı</th></tr>${sids.map(sid => { const t = tt[sid] || { f: 0, w: 0 }; return `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => `<td>${c[sid + "|" + d] ? ST[c[sid + "|" + d]][0] : ""}</td>`).join("")}<td ${tc}>${r1(t.f)}</td><td ${tc}>${r1(t.w)}</td></tr>`; }).join("")}</table></div><p class="mu">✈️ Uçtu · 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
+  return `<h2>${mn(m)} aylık çizelge</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>Çalışma saati toplamı</th></tr>${sids.map(sid => { const t = tt[sid] || { f: 0, w: 0 }; return `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => `<td>${c[sid + "|" + d] ? ST[c[sid + "|" + d]][0] : ""}</td>`).join("")}<td ${tc}>${r1(t.w)}</td></tr>`; }).join("")}</table></div><p class="mu">✈️ Uçtu · 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
 }
 function plView() {
   const cur = fd(new Date()).slice(0, 7), ed = S.month === cur;
@@ -789,9 +789,9 @@ function plView() {
   let pil = S.people.filter(x => x.r === "Pilot"); if (!pil.length) pil = S.people;
   const sids = [...new Set([...pil.map(x => x.id), ...Object.keys(tot)])];
   const [y, mo] = cur.split("-"), last = String(new Date(y, mo, 0).getDate()).padStart(2, "0"), today = fd(new Date());
-  const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp">${pil.map(x => `<option value="${x.id}">${esc(x.n)}</option>`).join("")}</select><select id="ps"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><input id="pw" type="number" min="0" step="0.5" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" min="0" step="0.1" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
+  const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp">${pil.map(x => `<option value="${x.id}">${esc(x.n)}</option>`).join("")}</select><select id="ps"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="0.5" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" min="0" step="0.1" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
   const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${r1(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${r1(t.f)}</b><div class="mu">uçuş sa.</div></div></div></div>`; }).join("");
-  const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
+  const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
   return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select>${pAdd()}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}${grid(m, sids, rows)}</div>`;
 }
 function joinCard() {
@@ -955,8 +955,10 @@ async function addH(id) {
 }
 const done100 = async id => { const d = fd(new Date()); await autoLog(id, "100 saatlik periyodik bakım", d); return patchBalloon(id, { hours_since_100h: 0, last_maint_date: d }, { h: 0, lm: d }); };
 async function doneY(id) { const d = new Date(); d.setFullYear(d.getFullYear() + 1); const s = fd(d); await autoLog(id, "Yıllık periyodik bakım", fd(new Date())); return patchBalloon(id, { annual_due: s }, { a: s }); }
+const SHIFTS = ["02.00-06.00", "03.00-07.00", "04.00-08.00", "05.00-09.00", "06.00-10.00"];
+function shiftPick(v) { if (!v) return; const [a, b] = v.split("-").map(x => parseFloat(x)); const w = document.getElementById("pw"); if (w) w.value = b - a; }
 async function addL() {
-  const d = val("pd"), sid = val("pp"), s = val("ps");
+  const d = val("pd"), sid = val("pp"), s = val("ps"), sh = (s === "i" || s === "n") ? "" : val("psh");
   const w = (s === "i" || s === "n") ? 0 : (parseFloat(val("pw")) || 0), f = s === "u" ? (parseFloat(val("pf")) || 0) : 0;
   if (!sid) return alert("Önce pilot ekleyin.");
   if (!d || (s === "u" && !(f > 0))) return alert("Tarih ve uçuş saatini girin.");
@@ -966,9 +968,9 @@ async function addL() {
     if (n > 6 && !confirm(p + " bu hafta " + n + ". gününe girecek. Haftalık 6 gün limiti aşılıyor, yine de kaydedilsin mi?")) return;
     if (n === 5) alert("Uyarı: " + p + " bu hafta 5. gününe ulaştı. 1 gün hakkı kaldı.");
   }
-  const { data, error } = await sb.from("duty_logs").insert({ company_id: S.co, staff_id: sid, log_date: d, status: STATUS_TO_DB[s], duty_hours: w, flight_hours: f }).select().single();
+  const { data, error } = await sb.from("duty_logs").insert({ company_id: S.co, staff_id: sid, log_date: d, status: STATUS_TO_DB[s], duty_hours: w, flight_hours: f, ...(sh ? { shift: sh } : {}) }).select().single();
   if (error) throw error;
-  S.logs.push({ id: data.id, d, sid, w, f, s }); S.month = d.slice(0, 7); render();
+  S.logs.push({ id: data.id, d, sid, w, f, s, sh }); S.month = d.slice(0, 7); render();
 }
 async function delL(id) {
   if (!confirm("Bu kayıt silinsin mi?")) return;
