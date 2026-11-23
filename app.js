@@ -603,7 +603,7 @@ function chk(sid, person) {
 function pAdd(del) {
   if (!canEditStaffRec(null)) return "";
   const roles = myRole() === "ground_mgr" ? ["Yer Ekibi"] : ROLES;
-  return `<details class="card"><summary><b>➕ Pilot / personel ekle</b></summary><div style="height:10px"></div><input id="pn" placeholder="Ad Soyad"><select id="pr">${roles.map(x => `<option>${x}</option>`).join("")}</select><button onclick="run(addP)">Ekle</button></details>${del && S.people.length ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Seçili personeli çıkar</button>` : ""}`;
+  return `<details class="card"><summary><b>➕ Pilot / personel ekle</b></summary><div style="height:10px"></div><input id="pn" placeholder="Ad Soyad"><select id="pr">${roles.map(x => `<option>${x}</option>`).join("")}</select><button onclick="run(addP)">Ekle</button></details>${S.people.length ? `<details class="card"><summary><b>🔁 Unvan değiştir (Pilot / Co-Pilot)</b></summary><div style="height:10px"></div><select id="rp">${S.people.map(x => `<option value="${x.id}">${esc(x.n)} — ${esc(x.r)}</option>`).join("")}</select><select id="rr">${roles.map(x => `<option>${x}</option>`).join("")}</select><button onclick="run(setRole)">Kaydet</button></details>` : ""}${del && S.people.length ? `<button class="sec" style="color:var(--er);border-color:var(--er)" onclick="run(delP)">🗑 Seçili personeli çıkar</button>` : ""}`;
 }
 function tabChips(items, cur, setter) {
   return `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px">${items.map(([k, t]) => `<button class="${k === cur ? "" : "sec"}" style="width:auto;margin:0;padding:8px 12px;font-size:13px" onclick="${setter}='${k}';render()">${esc(t)}</button>`).join("")}</div>`;
@@ -961,6 +961,11 @@ const SHIFTS = ["02.00-06.00", "03.00-07.00", "04.00-08.00", "05.00-09.00", "06.
 function shiftPick(v) { if (!v) return; const [a, b] = v.split("-").map(x => parseFloat(x)); const w = document.getElementById("pw"); if (w) w.value = b - a; }
 const isCo = sid => { const x = S.people.find(p => p.id === sid); return !!x && x.r === "Co-Pilot"; };
 function coSync() { const f = document.getElementById("pf"); if (!f) return; const co = isCo(val("pp")) && val("ps") === "u"; f.style.display = co ? "none" : ""; if (co) f.value = 1; }
+async function setRole() {
+  const id = val("rp"), r = val("rr"), x = S.people.find(p => p.id === id); if (!x) return;
+  const { error } = await sb.from("staff").update({ job_title: ROLE_TO_DB[r] || "other" }).eq("id", id); if (error) throw error;
+  x.r = r; const a = S.allStaff.find(p => p.id === id); if (a) a.r = r; render();
+}
 async function addL() {
   const d = val("pd"), sid = val("pp"), s = val("ps"), sh = (s === "i" || s === "n") ? "" : val("psh");
   const w = (s === "i" || s === "n") ? 0 : (parseFloat(val("pw")) || 0), f = s === "u" ? (isCo(sid) ? 1 : (parseFloat(val("pf")) || 0)) : 0;
