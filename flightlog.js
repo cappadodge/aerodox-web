@@ -334,7 +334,7 @@ function build(){const r=document.createElement("div");r.className="fl";
  <div class="fl-mapwrap"><button class="fl-rc" data-act="rc" hidden>Merkeze al</button><div class="fl-zoom"><button data-act="zi" aria-label="Yakınlaştır">+</button><button data-act="zo" aria-label="Uzaklaştır">−</button></div></div>
  <div class="fl-pos mu"></div>
  <div class="fl-peers mu"></div>
- <div class="fl-kml"><label class="fl-file" ${isAdmin()?"":"hidden"}>📍 NOTAM KML yükle<input type="file" class="fl-kfile" accept=".kml,.xml,application/vnd.google-earth.kml+xml,application/xml,text/xml"></label><span class="fl-kinfo mu"></span><button class="ghost" data-act="kfit" hidden>KML'ye git</button><button class="ghost" data-act="kclr" hidden>Temizle</button><label class="fl-simlbl">Balon çağrı kodu <select class="fl-cs" style="width:130px;display:inline-block"></select></label><label class="fl-simlbl"><input type="checkbox" class="fl-shr"> Ekiple paylaş</label><label class="fl-simlbl"><input type="checkbox" class="fl-sim"> Test konumu (simülasyon)</label></div>
+ <div class="fl-kml"><label class="fl-file" ${isAdmin()?"":"hidden"}>📍 NOTAM KML yükle<input type="file" class="fl-kfile" accept=".kml,.xml,application/vnd.google-earth.kml+xml,application/xml,text/xml"></label><span class="fl-kinfo mu"></span><button class="ghost" data-act="kfit" hidden>KML'ye git</button><button class="ghost" data-act="kclr" hidden>Temizle</button><label class="fl-simlbl">Balon çağrı kodu <select class="fl-cs" style="width:130px;display:inline-block"></select></label><label class="fl-simlbl"><input type="checkbox" class="fl-shr"> Ekiple paylaş</label></div>
 </div>
 <div class="fl-pane fl-p-log" hidden><div class="fl-list"></div></div>`;
  Q.root=r;Q.share=shareOn();r.querySelector(".fl-shr").checked=Q.share;Q.map=createMap(r.querySelector(".fl-mapwrap"),{state:()=>Q,onBreak:()=>{Q.follow=false;ui()}});
@@ -352,7 +352,7 @@ function ui(){const r=Q.root;if(!r||!r.isConnected)return;const T=(s,v)=>{const 
  T(".fl-timer",fmtDur(elapsed()));const go=r.querySelector(".fl-go");go.textContent=run?"Stop":"Start";go.classList.toggle("stop",run);
  T(".t-alt",c?f(c.ele):"–");T(".t-gs",c?f(c.gs*3.6,1):"–");T(".t-vs",c&&run?(c.vs>0?"+":"")+f(c.vs,1):"–");T(".t-wd",c&&c.windFrom!=null?Math.round(c.windFrom)+"° / "+f(c.windSpeed*3.6,0):"–");
  const fx=Q.fix;T(".fl-pos",fx?`${fx.lat.toFixed(5)}, ${fx.lon.toFixed(5)} · ±${Math.round(fx.acc||0)} m${Q.sim?" · TEST KONUMU":""} · Baro yükseklik: tarayıcıda yok, GPS kullanılıyor · ${BG?"Mod: yerel uygulama (arka plan konum)":"Mod: web sürümü (ekran açık kalmalı)"}${BG?"":" [Capacitor: "+(window.Capacitor?"var, platform="+(window.Capacitor.getPlatform?window.Capacitor.getPlatform():"?"):"yok")+"]"}`:Q.sim?"Test konumu bekleniyor…":"Konum bekleniyor…");
- r.querySelector(".fl-rc").hidden=!(run&&!Q.follow);r.querySelector(".fl-sim").checked=Q.sim;r.querySelector(".fl-sim").disabled=run;
+ r.querySelector(".fl-rc").hidden=!(run&&!Q.follow);
  const k=Q.kml,kn=k.polygons.length+k.lines.length+k.points.length;T(".fl-kinfo",kn?`${Q.kmlName} · ${k.polygons.length} saha, ${k.lines.length} hat, ${k.points.length} nokta`:(isAdmin()?"KML yüklenmedi (KMZ desteklenmez)":"NOTAM KML yüklenmedi (yönetici yükler)"));
  r.querySelector('[data-act="kfit"]').hidden=!kn;r.querySelector('[data-act="kclr"]').hidden=!kn||!isAdmin();T(".fl-cnt",Q.flights.length?" ("+Q.flights.length+")":"");
  let h="";if(Q.err)h+=`<div class="fl-al warn">${esc(Q.err)}</div>`;
