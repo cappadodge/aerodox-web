@@ -79,7 +79,7 @@ const WX = (() => {
   function now(h, i) {
     const w = h.wind_speed_10m[i], g = h.wind_gusts_10m[i], vis = h.visibility[i];
     const cell = (l, v, c) => `<div class="card stat"><b${c ? ` style="color:${c}"` : ""}>${v}</b><span class="mu">${l}</span></div>`;
-    return `<div class="grid">${cell("Yüzey rüzgârı (kt)", Math.round(w) + " " + dirTxt(h.wind_direction_10m[i]), col(w))}${cell("Hamle (kt)", Math.round(g), col(g))}${cell("Sıcaklık", Math.round(h.temperature_2m[i]) + "°C")}${cell("Görüş", vis == null ? "–" : (vis / 1000).toFixed(vis >= 10000 ? 0 : 1) + " km")}</div>`;
+    return `<div class="grid">${cell("Yüzey rüzgârı (kt)", w == null ? "–" : Math.round(w) + " " + dirTxt(h.wind_direction_10m[i]), w == null ? "" : col(w))}${cell("Hamle (kt)", g == null ? "–" : Math.round(g), g == null ? "" : col(g))}${cell("Sıcaklık", h.temperature_2m[i] == null ? "–" : Math.round(h.temperature_2m[i]) + "°C")}${cell("Görüş", vis == null ? "–" : (vis / 1000).toFixed(vis >= 10000 ? 0 : 1) + " km")}</div>`;
   }
   function dirTxt(d) { return ["K", "KKD", "KD", "DKD", "D", "DGD", "GD", "GGD", "G", "GGB", "GB", "BGB", "B", "BKB", "KB", "KKB"][Math.round(d / 22.5) % 16] || ""; }
   function paint() {

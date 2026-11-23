@@ -2,11 +2,11 @@
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>AviaDoX Gizlilik Politikası</title>
 <meta name="theme-color" content="#0b3d91">
 <link rel="icon" type="image/png" href="icons/icon-32.png">
-<style>body{margin:0;background:#eef1f9;color:#0f1b33;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}main{max-width:760px;margin:0 auto;padding:20px 16px 48px}header{background:#0b3d91;color:#fff;padding:14px 16px;font-weight:700;font-size:18px}h1,h2{color:#0b3d91}@media (prefers-color-scheme:dark){body{background:#08121f;color:#e8eef8}h1,h2{color:#7fb0ff}a{color:#7fb0ff}}</style>
+<style>body{margin:0;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);background:#eef1f9;color:#0f1b33;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}main{max-width:760px;margin:0 auto;padding:20px 16px 48px}header{background:#0b3d91;color:#fff;padding:14px 16px;font-weight:700;font-size:18px}h1,h2{color:#0b3d91}@media (prefers-color-scheme:dark){body{background:#08121f;color:#e8eef8}h1,h2{color:#7fb0ff}a{color:#7fb0ff}}</style>
 </head>
 <body>
 <header>AviaDoX</header>
@@ -16,9 +16,11 @@
 <script src="config.js"></script>
 <script src="i18n.js"></script>
 <script src="privacy.js"></script>
-<script>const K = (location.hash || "#pol").slice(1), kinds = [["pol","Gizlilik Politikası"],["ayd","KVKK Aydınlatma Metni"],["riza","Açık Rıza Beyanı"]];
-document.getElementById("tabs").innerHTML = kinds.map(k => '<a href="#' + k[0] + '" onclick="setTimeout(function(){location.reload()},0)" style="padding:6px 12px;border-radius:16px;border:1px solid #0b3d91;text-decoration:none;font-size:14px;' + (k[0]===K ? 'background:#0b3d91;color:#fff' : '') + '">' + k[1] + '</a>').join("");
-document.getElementById("m").innerHTML = privHtml(K);
+<script>const kinds = [["pol","Gizlilik Politikası"],["ayd","KVKK Aydınlatma Metni"],["riza","Açık Rıza Beyanı"]];
+function render(){const K = (location.hash || "#pol").slice(1);
+document.getElementById("tabs").innerHTML = kinds.map(k => '<a href="#' + k[0] + '" style="padding:6px 12px;border-radius:16px;border:1px solid #0b3d91;text-decoration:none;font-size:14px;' + (k[0]===K ? 'background:#0b3d91;color:#fff' : '') + '">' + k[1] + '</a>').join("");
+document.getElementById("m").innerHTML = privHtml(K);window.scrollTo(0,0)}
+render();window.addEventListener("hashchange",render);
 document.getElementById("lgx").innerHTML = '<select onchange="I18N.setLang(this.value)"><option value="tr"' + (I18N.lang==="tr"?" selected":"") + '>Türkçe</option><option value="en"' + (I18N.lang==="en"?" selected":"") + '>English</option></select>';</script>
 </body>
 </html>

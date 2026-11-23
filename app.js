@@ -4,6 +4,8 @@ const sb = supabase.createClient(AERODOX.SUPABASE_URL, AERODOX.SUPABASE_KEY, {
 });
 const BUCKET = "documents";
 
+const dayN = d => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d)); const t = m ? new Date(+m[1], +m[2] - 1, +m[3]) : new Date(d); return t; };
+const daysTo = d => Math.round((dayN(d) - new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())) / 864e5);
 const fd = x => x.getFullYear() + "-" + String(x.getMonth() + 1).padStart(2, "0") + "-" + String(x.getDate()).padStart(2, "0");
 const S = {
   user: null, profile: null, co: null, company: null, logoUrl: "",
@@ -214,7 +216,8 @@ async function doLogin() {
   if (!u || !p) { err.textContent = "Kullanıcı adı ve parolayı girin."; return; }
   const email = u.includes("@") ? u : u.toLowerCase() + "@" + AERODOX.AUTH_DOMAIN;
   btn.disabled = true; btn.textContent = "Giriş yapılıyor…"; err.textContent = "";
-  const { data, error } = await sb.auth.signInWithPassword({ email, password: p });
+  let data, error;
+  try { ({ data, error } = await sb.auth.signInWithPassword({ email, password: p })); } catch (e) { error = e; }
   if (error) {
     btn.disabled = false; btn.textContent = "Giriş Yap";
     err.textContent = /invalid|credentials/i.test(error.message || "") ? "Kullanıcı adı veya parola hatalı." : errMsg(error);
@@ -293,8 +296,8 @@ async function initApp() {
 /* ---------- tarih / durum yardımcıları ---------- */
 function st(d) {
   if (!d) return ["ok", "Süresiz"];
-  const k = (new Date(d) - new Date()) / 864e5;
-  return k < 0 ? ["er", "Süresi doldu"] : k < 30 ? ["wa", Math.ceil(k) + " gün kaldı"] : ["ok", "Geçerli"];
+  const k = daysTo(d);
+  return k < 0 ? ["er", "Süresi doldu"] : k < 30 ? ["wa", k + " gün kaldı"] : ["ok", "Geçerli"];
 }
 const mn = x => { const [y, m] = x.split("-"); return ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][m - 1] + " " + y; };
 const r1 = x => Math.round(x * 10) / 10;
@@ -324,7 +327,7 @@ const mapM = x => ({ id: x.id, b: x.balloon_id, r: x.balloon_reg || "", w: x.wor
 const CAMOS = [["kbbm", "Kapadokya Balon Bakım Merkezi"], ["khtm", "Kapadokya Havacılık Teknolojileri Merkezi"]];
 const camoName = id => (CAMOS.find(c => c[0] === id) || [0, ""])[1];
 const mapB = x => ({ id: x.id, r: x.registration, h: Number(x.hours_since_100h) || 0, a: x.annual_due, t: Number(x.total_hours) || 0, lm: x.last_maint_date, arc: x.arc_start, ts: x.temp_sensor_code || "", br: x.brand || "", md: x.model || "", ft: x.fuel_tanks || "", bu: x.burner_serial || "", ins: x.insurance_start, camo: x.camo || "", co: x.company_id });
-function bkInfo(b) { return { h: Math.round((100 - b.h) * 10) / 10, dl: b.a ? Math.ceil((new Date(b.a) - new Date()) / 864e5) : 999 }; }
+function bkInfo(b) { return { h: Math.round((100 - b.h) * 10) / 10, dl: b.a ? daysTo(b.a) : 999 }; }
 function mAlerts() {
   const o = [];
   S.balloons.forEach(b => {

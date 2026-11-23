@@ -309,13 +309,18 @@ const I18N = (() => {
   const L = "A-Za-zÇĞİÖŞÜçğıöşü0-9";
   const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const keys = Object.keys(D).sort((a, b) => b.length - a.length);
-  const big = new RegExp(keys.map(k => (/^[A-Za-zÇĞİÖŞÜçğıöşü]/.test(k) ? `(?<![${L}])` : "") + esc(k) + (/[A-Za-zÇĞİÖŞÜçğıöşü]$/.test(k) ? `(?![${L}])` : "")).join("|"), "g");
+  const big = new RegExp(keys.map(k => esc(k) + (/[A-Za-zÇĞİÖŞÜçğıöşü]$/.test(k) ? `(?![${L}])` : "")).join("|"), "g");
   function tx(s) {
     if (lang === "tr" || !s || typeof s !== "string") return s;
     if (!/[A-Za-zÇĞİÖŞÜçğıöşü]/.test(s)) return s;
     let o = s;
     for (const [r, v] of RX) o = o.replace(r, v);
-    return o.replace(big, m => D[m] != null ? D[m] : m);
+    const LR = new RegExp("[" + L + "]");
+    return o.replace(big, (m, ...a) => {
+      const off = a[a.length - 2], str = a[a.length - 1];
+      if (off > 0 && /^[A-Za-zÇĞİÖŞÜçğıöşü]/.test(m) && LR.test(str.charAt(off - 1))) return m;
+      return D[m] != null ? D[m] : m;
+    });
   }
   const ATTR = ["placeholder", "title", "aria-label", "alt"];
   const SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, CODE: 0 };

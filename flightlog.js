@@ -29,7 +29,7 @@ function flightStats(pts){let dist=0,maxAlt=-Infinity,maxClimb=0,maxSink=0;pts.f
 const xe=s=>String(s).replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&apos;"}[c]));
 const nf=(n,d)=>Number(n).toFixed(d);
 /* GPX 1.1. Hız/rota: Garmin TrackPointExtension v1. Tırmanış hızı, rüzgar, baro/GPS yükseklik: "bo" ad alanı (extensions). */
-function buildGpx(pts,o){if(!pts.length)throw new Error("Boş uçuş");const la=pts.map(p=>p.lat),lo=pts.map(p=>p.lon);const desc=o.sim?"<desc>SIMULASYON / TEST KAYDI</desc>":"";
+function buildGpx(pts,o){if(!pts.length)throw new Error("Boş uçuş");let mnLa=90,mxLa=-90,mnLo=180,mxLo=-180;for(const p of pts){if(p.lat<mnLa)mnLa=p.lat;if(p.lat>mxLa)mxLa=p.lat;if(p.lon<mnLo)mnLo=p.lon;if(p.lon>mxLo)mxLo=p.lon}const desc=o.sim?"<desc>SIMULASYON / TEST KAYDI</desc>":"";
  const tp=pts.map(p=>`${p.gapBefore?"    </trkseg>\n    <trkseg>\n":""}      <trkpt lat="${nf(p.lat,7)}" lon="${nf(p.lon,7)}">
 ${p.ele!=null?`        <ele>${nf(p.ele,1)}</ele>\n`:""}        <time>${p.t}</time>
         <extensions>
@@ -51,7 +51,7 @@ ${p.windFrom!=null?`          <bo:windFrom>${nf(p.windFrom,1)}</bo:windFrom>\n`:
     <name>${xe(o.name)}</name>
     ${desc}
     <time>${new Date(o.startedAt).toISOString()}</time>
-    <bounds minlat="${nf(Math.min(...la),7)}" minlon="${nf(Math.min(...lo),7)}" maxlat="${nf(Math.max(...la),7)}" maxlon="${nf(Math.max(...lo),7)}"/>
+    <bounds minlat="${nf(mnLa,7)}" minlon="${nf(mnLo,7)}" maxlat="${nf(mxLa,7)}" maxlon="${nf(mxLo,7)}"/>
   </metadata>
   <trk>
     <name>${xe(o.name)}</name>
@@ -75,7 +75,7 @@ const canDel=f=>(typeof isAdmin==="function"&&isAdmin())||f.sim;
 
 /* ---------- depolama: IndexedDB (şirket başına ayrı), olmazsa bellek ---------- */
 let dbp=null;const mem={flights:new Map(),meta:new Map()};
-function openDB(){if(!dbp)dbp=new Promise((res,rej)=>{try{const r=indexedDB.open("aerodox-fl-"+Q.co+"-"+(S.user?S.user.id:"anon"),1);r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore("flights",{keyPath:"id"});d.createObjectStore("meta",{keyPath:"key"})};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error||new Error("idb"));r.onblocked=()=>rej(new Error("blocked"))}catch(e){rej(e)}});return dbp}
+function openDB(){if(!dbp)dbp=new Promise((res,rej)=>{try{const r=indexedDB.open("aerodox-fl-"+Q.co+"-"+(S.user?S.user.id:"anon"),1);r.onupgradeneeded=()=>{const d=r.result;d.createObjectStore("flights",{keyPath:"id"});d.createObjectStore("meta",{keyPath:"key"})};r.onsuccess=()=>{const d=r.result;d.onversionchange=()=>{try{d.close()}catch(e){}dbp=null};res(d)};r.onerror=()=>rej(r.error||new Error("idb"));r.onblocked=()=>rej(new Error("blocked"))}catch(e){rej(e)}});return dbp}
 async function tx(s,mode,fn){const db=await openDB();return new Promise((res,rej)=>{const t=db.transaction(s,mode);const rq=fn(t.objectStore(s));t.oncomplete=()=>res(rq?rq.result:undefined);t.onerror=t.onabort=()=>rej(t.error||new Error("tx"))})}
 const keyOf=(s,v)=>s==="flights"?v.id:v.key;
 async function dbPut(s,v){try{await tx(s,"readwrite",o=>o.put(v))}catch(e){Q.persistent=false;mem[s].set(keyOf(s,v),v)}}
@@ -157,7 +157,7 @@ function checkFence(){const f=Q.fix;if(!f){Q.fence={level:"clear"};return}const 
 function geoMsg(e){return e&&e.code===1?"Konum izni verilmedi veya bu pencerede engelli. Tarayıcı/uygulama ayarlarından konuma izin verin. Gömülü pencerede engellenirse aşağıdaki Test konumunu kullanabilirsiniz.":e&&e.code===3?"Konum zaman aşımına uğradı, GPS sinyali bekleniyor.":"Konum alınamıyor (GPS sinyali yok veya cihaz desteklemiyor)."}
 /* Yerel (Capacitor) uygulamada arka plan konumu: eklenti varsa onu kullan, yoksa tarayıcı konumu */
 const BG=(()=>{try{const C=window.Capacitor;if(C&&C.isNativePlatform&&C.isNativePlatform())return C.registerPlugin("BackgroundGeolocation")}catch(e){}return null})();
-function toPos(l){return{coords:{latitude:l.latitude,longitude:l.longitude,altitude:l.altitude,speed:l.speed,heading:l.bearing,accuracy:l.accuracy},timestamp:l.time||Date.now()}}
+function toPos(l){return{coords:{latitude:l.latitude,longitude:l.longitude,altitude:l.altitude,speed:(l.speed!=null&&l.speed>=0?l.speed:null),heading:(l.bearing!=null&&l.bearing>=0?l.bearing:null),accuracy:l.accuracy},timestamp:l.time||Date.now()}}
 function startGeo(bg){if(Q.sim||Q.watch!=null)return;
  if(BG){const gen=Q.wgen=(Q.wgen||0)+1;const opts={requestPermissions:true,stale:false,distanceFilter:0};if(bg){opts.backgroundTitle="AviaDoX uçuş kaydı";opts.backgroundMessage="Uçuş kaydı sürüyor. Konum arka planda alınıyor."}
   BG.addWatcher(opts,(loc,err)=>{if(err){Q.err=err.code==="NOT_AUTHORIZED"?"Konum izni verilmedi. Ayarlar > Uygulamalar > AviaDoX > İzinler > Konum > Her zaman izin ver.":"Konum alınamıyor.";ui();return}if(loc)onPos(toPos(loc))}).then(id=>{if(gen!==Q.wgen||Q.sim)BG.removeWatcher({id}).catch(()=>{});else Q.watch=id}).catch(e=>{Q.err="Konum başlatılamadı: "+errMsg(e);ui()});Q.watch="pending";return}
@@ -165,11 +165,12 @@ function startGeo(bg){if(Q.sim||Q.watch!=null)return;
  try{Q.watch=navigator.geolocation.watchPosition(onPos,e=>{Q.err=geoMsg(e);ui()},{enableHighAccuracy:true,maximumAge:0,timeout:20000})}catch(e){Q.err=geoMsg(e);ui()}}
 function stopGeo(){Q.wgen=(Q.wgen||0)+1;if(Q.watch==null)return;if(BG){if(Q.watch!=="pending")BG.removeWatcher({id:Q.watch}).catch(()=>{})}else if(navigator.geolocation)navigator.geolocation.clearWatch(Q.watch);Q.watch=null}
 function restartGeo(bg){if(Q.sim)return;stopGeo();startGeo(bg)}
+function bgPersist(t){if(Q.pts.length>1&&t-(Q.draftT||0)>=15000){Q.draftT=t;dbPut("meta",{key:"draft",t0:Q.t0,pts:Q.pts,sim:Q.sim})}if(Q.share&&t-(Q.pubT||0)>=PUB_MS){Q.pubT=t;pubPos()}}
 function onPos(pos){Q.raw=pos;const c=pos.coords;
- if(BG&&Q.status==="running"&&!Q.sim){const lp=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(!lp||pos.timestamp-lp.ts>=900){const p=makePoint(pos,lp);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p}}
+ if(BG&&Q.status==="running"&&!Q.sim){const lp=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(!lp||pos.timestamp-lp.ts>=900){const p=makePoint(pos,lp);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p;bgPersist(pos.timestamp)}}
 Q.fix={lat:c.latitude,lon:c.longitude,acc:c.accuracy,heading:c.heading,speed:c.speed,alt:c.altitude,ts:pos.timestamp};Q.err="";
  if(Q.status!=="running")Q.cur=Q.prevP=makePoint(pos,Q.prevP);
- checkFence();if(Q.map){if(!Q.centered){Q.centered=true;Q.map.setView(Q.fix.lat,Q.fix.lon,14)}else if(Q.follow)Q.map.center(Q.fix.lat,Q.fix.lon);Q.map.redraw()}ui()}
+ checkFence();if(Q.map){if(!Q.centered){Q.centered=true;Q.map.setView(Q.fix.lat,Q.fix.lon,14)}else if(Q.follow)Q.map.center(Q.fix.lat,Q.fix.lon);if(document.visibilityState!=="hidden")Q.map.redraw()}if(document.visibilityState!=="hidden")ui()}
 /* Test konumu: sahte bir uçuş üretir; kayıtlar "Test" olarak işaretlenir */
 function startSim(){stopSim();const s={lat:38.6431,lon:34.8289,hdg:80,t:0};const step=()=>{s.t++;s.hdg=((s.hdg+Math.sin(s.t/30)*3)%360+360)%360;const spd=3+2*Math.sin(s.t/45);
  s.lat+=spd*Math.cos(rad(s.hdg))/111320;s.lon+=spd*Math.sin(rad(s.hdg))/(111320*Math.cos(rad(s.lat)));
@@ -180,7 +181,7 @@ function setSim(on){if(Q.status==="running"){note("Uçuş sürerken test konumu 
 
 /* ---------- oturum: Start / Stop ---------- */
 const elapsed=()=>Q.status==="running"?Q.now-Q.t0:Q.status==="stopped"?Q.t1-Q.t0:0;
-async function wakeOn(){try{if(navigator.wakeLock){Q.wake=await navigator.wakeLock.request("screen");Q.wake.addEventListener&&Q.wake.addEventListener("release",()=>{Q.wake=null;ui()})}}catch(e){Q.wake=null}ui()}
+async function wakeOn(){try{if(Q.wake){try{await Q.wake.release()}catch(e){}Q.wake=null}if(navigator.wakeLock){Q.wake=await navigator.wakeLock.request("screen");Q.wake.addEventListener&&Q.wake.addEventListener("release",()=>{Q.wake=null;ui()})}}catch(e){Q.wake=null}ui()}
 const locKey=()=>"aviadox-locok2-"+(typeof S!=="undefined"&&S.user?S.user.id:"x")+"-"+(typeof POLICY_VER==="function"?POLICY_VER():"1");
 const locOk=()=>{try{return localStorage.getItem(locKey())==="1"}catch(e){return false}};
 function askLoc(){return new Promise(res=>{if(locOk())return res(true);
@@ -212,7 +213,7 @@ async function pubClear(){try{await sb.from("live_pos").delete().eq("user_id",S.
 function start(){if(Q.status==="running")return;if(!Q.sim&&!locOk()){askLoc().then(ok=>{if(ok){startGeo();note("Konum başlatılıyor. Konum gelince Start'a tekrar bas.")}});return}if(!Q.fix){note("Henüz konum alınamadı. Konum iznini verin ve GPS sinyalini bekleyin.");return}
  Q.pts=[];Q.cur=null;Q.prevP=null;Q.last=null;Q.pendingGap=false;Q.gapMsg="";Q.gapSec=0;Q.hidAt=0;Q.draft=null;Q.draftT=0;Q.t0=Date.now();Q.now=Q.t0;Q.status="running";Q.follow=true;Q.fenceKey="";checkFence();wakeOn();restartGeo(true);
  Q.share=shareOn();Q.pubT=0;Q.timer=setInterval(tick,1000);if(Q.map){Q.map.center(Q.fix.lat,Q.fix.lon);Q.map.redraw()}ui()}
-function tick(){const now=Date.now(),raw=Q.raw;Q.now=now;const lastP=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(raw&&now-raw.timestamp<=FIX_MAX_AGE&&!(lastP&&now-lastP.ts<900)){const p=makePoint({coords:raw.coords,timestamp:now},Q.pts.length?Q.pts[Q.pts.length-1]:null);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p}
+function tick(){const now=Date.now(),raw=Q.raw;Q.now=now;const lastP=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(!BG&&raw&&now-raw.timestamp<=FIX_MAX_AGE&&!(lastP&&now-lastP.ts<900)){const p=makePoint({coords:raw.coords,timestamp:now},Q.pts.length?Q.pts[Q.pts.length-1]:null);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p}
  if(!Q.sim&&Q.pts.length>1&&now-Q.draftT>=15000){Q.draftT=now;dbPut("meta",{key:"draft",t0:Q.t0,pts:Q.pts,sim:Q.sim})}
  if(Q.share&&!Q.sim&&now-(Q.pubT||0)>=PUB_MS){Q.pubT=now;pubPos()}
  if(Q.map)Q.map.redraw();ui()}
@@ -374,7 +375,7 @@ function renderLog(){const r=Q.root;if(!r||!r.isConnected||Q.sub!=="log")return;
 /* ---------- dış API ---------- */
 function init(co){Q.co=co;dbp=null;mem.flights.clear();mem.meta.clear();Q.persistent=true;
  loadKmlRemote().catch(()=>{});checkDraft().catch(()=>{});
- Q.purgeT=setInterval(refreshFlights,6*36e5);Q.visH=()=>{if(document.visibilityState==="hidden"){if(Q.status==="running"&&!BG)Q.hidAt=Date.now();return}
+ Q.purgeT=setInterval(refreshFlights,6*36e5);Q.visH=()=>{if(document.visibilityState==="hidden"){if(Q.status==="running"&&!Q.sim&&Q.pts.length>1)dbPut("meta",{key:"draft",t0:Q.t0,pts:Q.pts,sim:Q.sim});if(Q.status==="running"&&!BG)Q.hidAt=Date.now();return}
   refreshFlights();if(Q.status==="running"){if(!Q.wake)wakeOn();if(Q.hidAt&&!BG){const g=Date.now()-Q.hidAt;Q.hidAt=0;if(g>5000){Q.pendingGap=true;Q.gapSec+=g/1000;Q.gapMsg="Uçuş sırasında uygulama toplam "+fmtDur(Q.gapSec*1000)+" arka planda kaldı; bu sürelerde konum kaydedilmedi (GPX'te iz kopuk görünür). Ekranı açık tut.";ui()}}}};document.addEventListener("visibilitychange",Q.visH);refreshFlights()}
 function mount(host,co){if(!host)return;if(Q.co&&Q.co!==co)reset();if(!Q.co)init(co);if(!Q.root)build();host.appendChild(Q.root);peersStart();if(locOk())startGeo();else if(!Q.locAsked){Q.locAsked=true;askLoc().then(ok=>{if(ok)startGeo()})}showSub();ui();requestAnimationFrame(()=>{if(Q.map)Q.map.resize()})}
 function reset(){peersStop();if(Q.status==="running")pubClear();stopGeo();stopSim();clearInterval(Q.timer);clearInterval(Q.purgeT);clearTimeout(Q.noteT);clearTimeout(Q.confirmT);if(Q.visH)document.removeEventListener("visibilitychange",Q.visH);if(Q.map)Q.map.destroy();if(Q.root)Q.root.remove();dbp=null;Object.assign(Q,fresh())}
