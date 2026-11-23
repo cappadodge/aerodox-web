@@ -58,8 +58,8 @@ nav button.on{color:var(--pr)}
 .fl-pos{font-size:12px}
 .fl-telem{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .fl-telem div{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:6px 4px;text-align:center}
-.fl-telem b{display:block;font-size:15px;color:var(--pr);font-variant-numeric:tabular-nums}
-.fl-telem span{font-size:10.5px;color:var(--mu)}
+.fl-telem b{display:block;font-size:26px;line-height:1.15;font-weight:800;font-variant-numeric:tabular-nums}.fl-telem div:nth-child(1) b{color:#1d6fe0}.fl-telem div:nth-child(2) b{color:#12a150}.fl-telem div:nth-child(3) b{color:#e07b00}.fl-telem div:nth-child(4) b{color:#8e44ad}.fl-telem div{border-width:2px}
+.fl-telem span{font-size:11px;font-weight:600;color:var(--mu)}
 .fl-kml{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px}
 .fl-file{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:600}
 .fl-file input{display:none}

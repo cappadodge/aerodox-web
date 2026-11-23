@@ -156,6 +156,7 @@ function checkFence(){const f=Q.fix;if(!f){Q.fence={level:"clear"};return}const 
 /* ---------- konum ---------- */
 function geoMsg(e){return e&&e.code===1?"Konum izni verilmedi veya bu pencerede engelli. Tarayıcı/uygulama ayarlarından konuma izin verin. Gömülü pencerede engellenirse aşağıdaki Test konumunu kullanabilirsiniz.":e&&e.code===3?"Konum zaman aşımına uğradı, GPS sinyali bekleniyor.":"Konum alınamıyor (GPS sinyali yok veya cihaz desteklemiyor)."}
 /* Yerel (Capacitor) uygulamada arka plan konumu: eklenti varsa onu kullan, yoksa tarayıcı konumu */
+const PT_MS=15000,due=(lp,t)=>!lp||t-lp.ts>=PT_MS-500;
 const BG=(()=>{try{const C=window.Capacitor;if(C&&C.isNativePlatform&&C.isNativePlatform())return C.registerPlugin("BackgroundGeolocation")}catch(e){}return null})();
 function toPos(l){return{coords:{latitude:l.latitude,longitude:l.longitude,altitude:l.altitude,speed:(l.speed!=null&&l.speed>=0?l.speed:null),heading:(l.bearing!=null&&l.bearing>=0?l.bearing:null),accuracy:l.accuracy},timestamp:l.time||Date.now()}}
 function startGeo(bg){if(Q.sim||Q.watch!=null)return;
@@ -167,7 +168,7 @@ function stopGeo(){Q.wgen=(Q.wgen||0)+1;if(Q.watch==null)return;if(BG){if(Q.watc
 function restartGeo(bg){if(Q.sim)return;stopGeo();startGeo(bg)}
 function bgPersist(t){if(Q.pts.length>1&&t-(Q.draftT||0)>=15000){Q.draftT=t;dbPut("meta",{key:"draft",t0:Q.t0,pts:Q.pts,sim:Q.sim})}if(Q.share&&t-(Q.pubT||0)>=PUB_MS){Q.pubT=t;pubPos()}}
 function onPos(pos){Q.raw=pos;const c=pos.coords;
- if(BG&&Q.status==="running"&&!Q.sim){const lp=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(!lp||pos.timestamp-lp.ts>=900){const p=makePoint(pos,lp);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p;bgPersist(pos.timestamp)}}
+ if(BG&&Q.status==="running"&&!Q.sim){const lp=Q.pts.length?Q.pts[Q.pts.length-1]:null;const p=makePoint(pos,lp);Q.live=p;if(due(lp,pos.timestamp)){if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p;bgPersist(pos.timestamp)}}
 Q.fix={lat:c.latitude,lon:c.longitude,acc:c.accuracy,heading:c.heading,speed:c.speed,alt:c.altitude,ts:pos.timestamp};Q.err="";
  if(Q.status!=="running")Q.cur=Q.prevP=makePoint(pos,Q.prevP);
  checkFence();if(Q.map){if(!Q.centered){Q.centered=true;Q.map.setView(Q.fix.lat,Q.fix.lon,14)}else if(Q.follow)Q.map.center(Q.fix.lat,Q.fix.lon);if(document.visibilityState!=="hidden")Q.map.redraw()}if(document.visibilityState!=="hidden")ui()}
@@ -207,13 +208,13 @@ async function peersStart(){if(Q.peerCh||!Q.co)return;Q.peers={};
   if(Q.map)Q.map.redraw();peersUi()}).subscribe()}catch(e){}
  clearInterval(Q.peerT);Q.peerT=setInterval(()=>{if(Q.map)Q.map.redraw();peersUi()},15000);if(Q.map)Q.map.redraw();peersUi()}
 function peersStop(){clearInterval(Q.peerT);Q.peerT=null;if(Q.peerCh){try{sb.removeChannel(Q.peerCh)}catch(e){}Q.peerCh=null}Q.peers={}}
-async function pubPos(){if(!Q.share||Q.sim||Q.status!=="running"||!Q.cur||!navigator.onLine)return;const p=Q.cur;
+async function pubPos(){if(!Q.share||Q.sim||Q.status!=="running"||!Q.cur||!navigator.onLine)return;const p=Q.live||Q.cur;
  try{await sb.from("live_pos").upsert({user_id:S.user.id,company_id:S.co,name:pilotName(),lat:p.lat,lon:p.lon,alt:p.ele==null?null:p.ele,speed:p.gs==null?null:p.gs,heading:p.course==null?null:p.course,callsign:callOn()||null,updated_at:new Date().toISOString()})}catch(e){}}
 async function pubClear(){try{await sb.from("live_pos").delete().eq("user_id",S.user.id)}catch(e){}}
 function start(){if(Q.status==="running")return;if(!Q.sim&&!locOk()){askLoc().then(ok=>{if(ok){startGeo();note("Konum başlatılıyor. Konum gelince Start'a tekrar bas.")}});return}if(!Q.fix){note("Henüz konum alınamadı. Konum iznini verin ve GPS sinyalini bekleyin.");return}
- Q.pts=[];Q.cur=null;Q.prevP=null;Q.last=null;Q.pendingGap=false;Q.gapMsg="";Q.gapSec=0;Q.hidAt=0;Q.draft=null;Q.draftT=0;Q.t0=Date.now();Q.now=Q.t0;Q.status="running";Q.follow=true;Q.fenceKey="";checkFence();wakeOn();restartGeo(true);
+ Q.pts=[];Q.cur=null;Q.live=null;Q.prevP=null;Q.last=null;Q.pendingGap=false;Q.gapMsg="";Q.gapSec=0;Q.hidAt=0;Q.draft=null;Q.draftT=0;Q.t0=Date.now();Q.now=Q.t0;Q.status="running";Q.follow=true;Q.fenceKey="";checkFence();wakeOn();restartGeo(true);
  Q.share=shareOn();Q.pubT=0;Q.timer=setInterval(tick,1000);if(Q.map){Q.map.center(Q.fix.lat,Q.fix.lon);Q.map.redraw()}ui()}
-function tick(){const now=Date.now(),raw=Q.raw;Q.now=now;const lastP=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(!BG&&raw&&now-raw.timestamp<=FIX_MAX_AGE&&!(lastP&&now-lastP.ts<900)){const p=makePoint({coords:raw.coords,timestamp:now},Q.pts.length?Q.pts[Q.pts.length-1]:null);if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p}
+function tick(){const now=Date.now(),raw=Q.raw;Q.now=now;const lastP=Q.pts.length?Q.pts[Q.pts.length-1]:null;if(!BG&&raw&&now-raw.timestamp<=FIX_MAX_AGE){const p=makePoint({coords:raw.coords,timestamp:now},lastP);Q.live=p;if(due(lastP,now)){if(Q.pendingGap){p.gapBefore=true;Q.pendingGap=false}Q.pts.push(p);Q.cur=p}}
  if(!Q.sim&&Q.pts.length>1&&now-Q.draftT>=15000){Q.draftT=now;dbPut("meta",{key:"draft",t0:Q.t0,pts:Q.pts,sim:Q.sim})}
  if(Q.share&&!Q.sim&&now-(Q.pubT||0)>=PUB_MS){Q.pubT=now;pubPos()}
  if(Q.map)Q.map.redraw();ui()}
@@ -328,15 +329,15 @@ function build(){const r=document.createElement("div");r.className="fl";
  r.innerHTML=`<div class="fl-tabs"><button data-act="sub" data-v="map" class="on">🗺️ Harita</button><button data-act="sub" data-v="log">📁 Kayıtlar<span class="fl-cnt"></span></button></div>
 <div class="fl-pane fl-p-map">
  <div class="fl-bar"><div class="fl-timer">00:00:00</div><button class="fl-go" data-act="go">Start</button></div>
+ <div class="fl-telem"><div><b class="t-alt">–</b><span>Yükseklik m</span></div><div><b class="t-gs">–</b><span>Yer hızı km/sa</span></div><div><b class="t-vs">–</b><span>Dikey hız m/s</span></div><div><b class="t-wd">–</b><span>Rüzgar yön° / km/sa</span></div></div>
  <div class="fl-alerts"></div>
  <div class="fl-mapwrap"><button class="fl-rc" data-act="rc" hidden>Merkeze al</button><div class="fl-zoom"><button data-act="zi" aria-label="Yakınlaştır">+</button><button data-act="zo" aria-label="Uzaklaştır">−</button></div></div>
  <div class="fl-pos mu"></div>
  <div class="fl-peers mu"></div>
- <div class="fl-telem"><div><b class="t-alt">–</b><span>Yükseklik m</span></div><div><b class="t-gs">–</b><span>Yer hızı km/sa</span></div><div><b class="t-vs">–</b><span>Dikey hız m/s</span></div><div><b class="t-wd">–</b><span>Rüzgar yön° / km/sa</span></div></div>
- <div class="fl-kml"><label class="fl-file" ${isAdmin()?"":"hidden"}>📍 NOTAM KML yükle<input type="file" class="fl-kfile" accept=".kml,.xml,application/vnd.google-earth.kml+xml,application/xml,text/xml"></label><span class="fl-kinfo mu"></span><button class="ghost" data-act="kfit" hidden>KML'ye git</button><button class="ghost" data-act="kclr" hidden>Temizle</button><label class="fl-simlbl">Balon çağrı kodu <input type="text" class="fl-cs" maxlength="12" placeholder="TC-BXX" autocapitalize="characters" style="width:110px;display:inline-block"></label><label class="fl-simlbl"><input type="checkbox" class="fl-shr"> Ekiple paylaş</label><label class="fl-simlbl"><input type="checkbox" class="fl-sim"> Test konumu (simülasyon)</label></div>
+ <div class="fl-kml"><label class="fl-file" ${isAdmin()?"":"hidden"}>📍 NOTAM KML yükle<input type="file" class="fl-kfile" accept=".kml,.xml,application/vnd.google-earth.kml+xml,application/xml,text/xml"></label><span class="fl-kinfo mu"></span><button class="ghost" data-act="kfit" hidden>KML'ye git</button><button class="ghost" data-act="kclr" hidden>Temizle</button><label class="fl-simlbl">Balon çağrı kodu <select class="fl-cs" style="width:130px;display:inline-block"></select></label><label class="fl-simlbl"><input type="checkbox" class="fl-shr"> Ekiple paylaş</label><label class="fl-simlbl"><input type="checkbox" class="fl-sim"> Test konumu (simülasyon)</label></div>
 </div>
 <div class="fl-pane fl-p-log" hidden><div class="fl-list"></div></div>`;
- Q.root=r;Q.share=shareOn();r.querySelector(".fl-shr").checked=Q.share;r.querySelector(".fl-cs").value=callOn();Q.map=createMap(r.querySelector(".fl-mapwrap"),{state:()=>Q,onBreak:()=>{Q.follow=false;ui()}});
+ Q.root=r;Q.share=shareOn();r.querySelector(".fl-shr").checked=Q.share;Q.map=createMap(r.querySelector(".fl-mapwrap"),{state:()=>Q,onBreak:()=>{Q.follow=false;ui()}});
  r.addEventListener("input",e=>{const t=e.target&&e.target.dataset&&e.target.dataset.trim;if(!t)return;if(t==="h")Q.trimH=e.target.value;else Q.trimT=e.target.value;if(Q.trimSure){Q.trimSure=false;const b=r.querySelector('[data-act="trimgo"]');if(b)b.textContent="Kırp ve kaydet"}trimPreview()});
  r.addEventListener("click",e=>{const b=e.target.closest("[data-act]");if(!b||!r.contains(b))return;const a=b.dataset.act,id=b.dataset.id,rec=Q.flights.find(x=>x.id===id)||(Q.last&&Q.last.id===id?Q.last:null);
   if(a==="sub"){Q.sub=b.dataset.v;showSub()}else if(a==="go"){Q.status==="running"?stop():start()}
@@ -346,7 +347,8 @@ function build(){const r=document.createElement("div");r.className="fl";
   else if(a==="del"&&rec){if(Q.confirmId===id){clearTimeout(Q.confirmT);Q.confirmId=null;delFlight(rec).then(refreshFlights,e=>note("Silinemedi: "+errMsg(e)))}else{Q.confirmId=id;clearTimeout(Q.confirmT);Q.confirmT=setTimeout(()=>{Q.confirmId=null;renderLog()},4000);renderLog()}}});
  r.addEventListener("change",e=>{if(e.target.matches(".fl-cs")){const v=e.target.value.trim().toUpperCase().slice(0,12);e.target.value=v;try{localStorage.setItem(csKey(),v)}catch(x){}if(Q.status==="running"){Q.pubT=0;pubPos()}return}if(e.target.matches(".fl-shr")){Q.share=e.target.checked;try{localStorage.setItem(shKey(),Q.share?"1":"0")}catch(x){}if(Q.share){Q.pubT=0;if(Q.status==="running")pubPos()}else pubClear()}else if(e.target.matches(".fl-sim"))setSim(e.target.checked);else if(e.target.matches(".fl-kfile"))loadKml(e.target)})}
 function showSub(){if(!Q.root)return;Q.root.querySelector(".fl-p-map").hidden=Q.sub!=="map";Q.root.querySelector(".fl-p-log").hidden=Q.sub!=="log";Q.root.querySelectorAll(".fl-tabs button").forEach(b=>b.classList.toggle("on",b.dataset.v===Q.sub));if(Q.sub==="log")renderLog();else if(Q.map)Q.map.resize()}
-function ui(){const r=Q.root;if(!r||!r.isConnected)return;const T=(s,v)=>{const el=r.querySelector(s);if(el&&el.textContent!==v)el.textContent=v};const run=Q.status==="running",c=Q.cur,f=(v,d)=>v==null||!isFinite(v)?"–":v.toFixed(d||0);
+function csFill(r){const el=r.querySelector(".fl-cs");if(!el)return;const cur=callOn();const regs=[...new Set((S.balloons||[]).map(b=>b.r).filter(Boolean))].sort();if(cur&&!regs.includes(cur))regs.push(cur);const sig=regs.join("|")+"#"+cur;if(el.dataset.sig===sig)return;el.dataset.sig=sig;el.innerHTML='<option value="">Seçiniz</option>'+regs.map(x=>`<option value="${esc(x)}"${x===cur?" selected":""}>${esc(x)}</option>`).join("")}
+function ui(){const r=Q.root;if(!r||!r.isConnected)return;const T=(s,v)=>{const el=r.querySelector(s);if(el&&el.textContent!==v)el.textContent=v};csFill(r);const run=Q.status==="running",c=run?(Q.live||Q.cur):Q.cur,f=(v,d)=>v==null||!isFinite(v)?"–":v.toFixed(d||0);
  T(".fl-timer",fmtDur(elapsed()));const go=r.querySelector(".fl-go");go.textContent=run?"Stop":"Start";go.classList.toggle("stop",run);
  T(".t-alt",c?f(c.ele):"–");T(".t-gs",c?f(c.gs*3.6,1):"–");T(".t-vs",c&&run?(c.vs>0?"+":"")+f(c.vs,1):"–");T(".t-wd",c&&c.windFrom!=null?Math.round(c.windFrom)+"° / "+f(c.windSpeed*3.6,0):"–");
  const fx=Q.fix;T(".fl-pos",fx?`${fx.lat.toFixed(5)}, ${fx.lon.toFixed(5)} · ±${Math.round(fx.acc||0)} m${Q.sim?" · TEST KONUMU":""} · Baro yükseklik: tarayıcıda yok, GPS kullanılıyor · ${BG?"Mod: yerel uygulama (arka plan konum)":"Mod: web sürümü (ekran açık kalmalı)"}${BG?"":" [Capacitor: "+(window.Capacitor?"var, platform="+(window.Capacitor.getPlatform?window.Capacitor.getPlatform():"?"):"yok")+"]"}`:Q.sim?"Test konumu bekleniyor…":"Konum bekleniyor…");
