@@ -156,7 +156,7 @@ function checkFence(){const f=Q.fix;if(!f){Q.fence={level:"clear"};return}const 
 /* ---------- konum ---------- */
 function geoMsg(e){return e&&e.code===1?"Konum izni verilmedi veya bu pencerede engelli. Tarayıcı/uygulama ayarlarından konuma izin verin. Gömülü pencerede engellenirse aşağıdaki Test konumunu kullanabilirsiniz.":e&&e.code===3?"Konum zaman aşımına uğradı, GPS sinyali bekleniyor.":"Konum alınamıyor (GPS sinyali yok veya cihaz desteklemiyor)."}
 /* Yerel (Capacitor) uygulamada arka plan konumu: eklenti varsa onu kullan, yoksa tarayıcı konumu */
-const PT_MS=15000,due=(lp,t)=>!lp||t-lp.ts>=PT_MS-500;
+const PT_MS=10000,due=(lp,t)=>!lp||t-lp.ts>=PT_MS-500;
 const BG=(()=>{try{const C=window.Capacitor;if(C&&C.isNativePlatform&&C.isNativePlatform())return C.registerPlugin("BackgroundGeolocation")}catch(e){}return null})();
 function toPos(l){return{coords:{latitude:l.latitude,longitude:l.longitude,altitude:l.altitude,speed:(l.speed!=null&&l.speed>=0?l.speed:null),heading:(l.bearing!=null&&l.bearing>=0?l.bearing:null),accuracy:l.accuracy},timestamp:l.time||Date.now()}}
 function startGeo(bg){if(Q.sim||Q.watch!=null)return;
