@@ -302,6 +302,9 @@ function st(d) {
 const mn = x => { const [y, m] = x.split("-"); return ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"][m - 1] + " " + y; };
 const r1 = x => Math.round(x * 10) / 10;
 const r2 = x => Math.round(x * 100) / 100;
+const toMin = v => { v = Number(v) || 0; const h = Math.floor(v + 1e-9); return h * 60 + Math.round((v - h) * 100); };
+const badHM = v => { v = Number(v) || 0; const h = Math.floor(v + 1e-9); return Math.round((v - h) * 100) > 59; };
+const fmtHM = m => String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
 function mon(s) { const [y, m, d] = s.split("-").map(Number), x = new Date(y, m - 1, d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return fd(x); }
 /* Haftalık uçuş günü sayısı: uçtu + alana gidilen iptal; "önceden iptal" günü sayacı sıfırlar */
 function wc(sid, wk, add) {
@@ -774,12 +777,12 @@ function wInfo(sids) {
 }
 function grid(m, sids, rows) {
   const [y, mo] = m.split("-"), n = new Date(y, mo, 0).getDate(), pr = { u: 4, c: 3, i: 2, n: 1 }, c = {}, hv = {}, ids = {}, ed = m === fd(new Date()).slice(0, 7) && canEditSched(), F = S.plTab !== "w", key = F ? "f" : "w";
-  rows.forEach(l => { const k = l.sid + "|" + Number(l.d.slice(8)); if (!c[k] || pr[l.s] > pr[c[k]]) c[k] = l.s; hv[k] = (hv[k] || 0) + l[key]; (ids[k] = ids[k] || []).push(l.id); });
+  rows.forEach(l => { const k = l.sid + "|" + Number(l.d.slice(8)); if (!c[k] || pr[l.s] > pr[c[k]]) c[k] = l.s; hv[k] = (hv[k] || 0) + (F && isCo(l.sid) ? l[key] : toMin(l[key])); (ids[k] = ids[k] || []).push(l.id); });
   const days = Array.from({ length: n }, (_, i) => i + 1), tt = {};
-  rows.forEach(l => { tt[l.sid] = (tt[l.sid] || 0) + l[key]; });
+  rows.forEach(l => { tt[l.sid] = (tt[l.sid] || 0) + (F && isCo(l.sid) ? l[key] : toMin(l[key])); });
   const tc = 'style="text-align:center;font-weight:700;white-space:nowrap;padding:4px 8px"';
-  const cell = k => hv[k] > 0 ? r2(hv[k]) : (c[k] && c[k] !== "u" ? ST[c[k]][0] : "");
-  return `<h2>${mn(m)} ${F ? "uçuş saati" : "çalışma saati"} çizelgesi</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>${F ? "Uçuş saati toplamı" : "Çalışma saati toplamı"}</th></tr>${sids.map(sid => `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => { const k = sid + "|" + d; return ed ? `<td style="cursor:pointer" title="Düzenle / ekle" onclick="cellEdit('${sid}',${d})">${cell(k)}</td>` : `<td>${cell(k)}</td>`; }).join("")}<td ${tc}>${r2(tt[sid] || 0)} ${F && isCo(sid) ? "gün" : "sa"}</td></tr>`).join("")}</table></div><p class="mu">${ed ? "Girmek, düzeltmek veya silmek için tablodaki hücreye dokun. " : ""}Rakamlar o gün girilen saattir. 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
+  const cell = k => hv[k] > 0 ? (F && isCo(k.split("|")[0]) ? hv[k] : fmtHM(hv[k])) : (c[k] && c[k] !== "u" ? ST[c[k]][0] : "");
+  return `<h2>${mn(m)} ${F ? "uçuş saati" : "çalışma saati"} çizelgesi</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>${F ? "Uçuş saati toplamı" : "Çalışma saati toplamı"}</th></tr>${sids.map(sid => `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => { const k = sid + "|" + d; return ed ? `<td style="cursor:pointer" title="Düzenle / ekle" onclick="cellEdit('${sid}',${d})">${cell(k)}</td>` : `<td>${cell(k)}</td>`; }).join("")}<td ${tc}>${F && isCo(sid) ? (tt[sid] || 0) + " gün" : fmtHM(tt[sid] || 0) + " sa"}</td></tr>`).join("")}</table></div><p class="mu">${ed ? "Girmek, düzeltmek veya silmek için tablodaki hücreye dokun. " : ""}Rakamlar o gün girilen saattir. 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
 }
 function plView() {
   const cur = fd(new Date()).slice(0, 7), ed = S.month === cur;
@@ -787,16 +790,16 @@ function plView() {
   if (!ms.includes(S.month)) S.month = cur;
   const m = S.month;
   const rows = S.logs.filter(l => l.d.slice(0, 7) === m).sort((a, b) => b.d.localeCompare(a.d));
-  const tot = {}; rows.forEach(l => { const t = tot[l.sid] = tot[l.sid] || { w: 0, f: 0, g: new Set() }; t.w += l.w; t.f += l.f; if (l.s === "u") t.g.add(l.d); });
+  const tot = {}; rows.forEach(l => { const t = tot[l.sid] = tot[l.sid] || { w: 0, f: 0, g: new Set() }; t.w += toMin(l.w); t.f += isCo(l.sid) ? l.f : toMin(l.f); if (l.s === "u") t.g.add(l.d); });
   let pil = S.people.filter(x => x.r === "Pilot" || x.r === "Co-Pilot"); if (!pil.length) pil = S.people;
   const ord = id => { const x = S.allStaff.find(p => p.id === id); return x ? x.o : 99999; };
   const sids = [...new Set([...pil.map(x => x.id), ...Object.keys(tot)])].sort((a, b) => ord(a) - ord(b));
   const ordCard = canEditCo() ? `<details class="card"><summary><b>↕ Çizelge isim sırası</b></summary><div style="height:8px"></div>${sids.map((id, i) => `<div class="row" style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="flex:1">${i + 1}. ${esc(nm(id))}</span><button class="sec" style="width:auto;margin:0;padding:4px 12px" ${i ? "" : "disabled"} onclick="run(()=>moveP('${id}',-1))">▲</button><button class="sec" style="width:auto;margin:0;padding:4px 12px" ${i < sids.length - 1 ? "" : "disabled"} onclick="run(()=>moveP('${id}',1))">▼</button></div>`).join("")}</details>` : "";
   const [y, mo] = cur.split("-"), last = String(new Date(y, mo, 0).getDate()).padStart(2, "0"), today = fd(new Date());
-  const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp" onchange="coSync()">${pil.map(x => `<option value="${x.id}">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</option>`).join("")}</select><select id="ps" onchange="coSync()"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" title="Co-Pilot: uçtuysa 1" min="0" step="any" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
+  const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp" onchange="coSync()">${pil.map(x => `<option value="${x.id}">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</option>`).join("")}</select><select id="ps" onchange="coSync()"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="any" placeholder="Çalışma süresi (SS.DD, örn. 00.55)"><input id="pf" type="number" title="Co-Pilot: uçtuysa 1" min="0" step="any" placeholder="Uçuş süresi (SS.DD, örn. 00.55)"><button onclick="run(addL)">Kaydet</button></div>`;
   const bulk = `<details class="card"><summary><b>🗓 Toplu işaretle (izin / iptal)</b></summary><div style="height:8px"></div><div class="mu">Başlangıç - bitiş tarihi</div><input id="bd1" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><input id="bd2" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="bs"><option value="i">🏖️ İzinli</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option><option value="c">🚫 Alana gidildi, uçuş iptal</option></select><div style="margin:8px 0">${pil.map(x => `<label style="display:block;padding:3px 0"><input type="checkbox" class="bp" value="${x.id}" checked style="width:auto;margin-right:8px">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</label>`).join("")}</div><button onclick="run(bulkMark)">Seçililere uygula</button></details>`;
-  const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${r2(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${r2(t.f)}</b><div class="mu">${isCo(sid) ? "uçuş günü (Co-Pilot)" : "uçuş sa."}</div></div></div></div>`; }).join("");
-  const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed && canEditSched() ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
+  const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${fmtHM(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${isCo(sid) ? t.f : fmtHM(t.f)}</b><div class="mu">${isCo(sid) ? "uçuş günü (Co-Pilot)" : "uçuş sa."}</div></div></div></div>`; }).join("");
+  const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${fmtHM(toMin(l.w))} sa · uçuş ${isCo(l.sid) ? l.f + " gün" : fmtHM(toMin(l.f)) + " sa"}</div></div>${ed && canEditSched() ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
   return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select><div style="display:flex;gap:8px;margin:14px 0 4px"><button class="${S.plTab !== "w" ? "" : "x"}" onclick="S.plTab=\'f\';render()">✈️ Uçuş saati çizelgesi</button><button class="${S.plTab === "w" ? "" : "x"}" onclick="S.plTab=\'w\';render()">🕓 Çalışma saati çizelgesi</button></div>${grid(m, sids, rows)}${pAdd()}${ordCard}${ed && canEditSched() ? bulk : ''}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}</div>`;
 }
 function joinCard() {
@@ -1001,7 +1004,7 @@ function cellEdit(sid, day) {
   const d = S.month + "-" + String(day).padStart(2, "0"), ex = S.logs.filter(l => l.sid === sid && l.d === d), e = ex[0] || {}, co = isCo(sid);
   const old = document.getElementById("cem"); if (old) old.remove();
   const m = document.createElement("div"); m.id = "cem"; m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px";
-  m.innerHTML = `<div class="card" style="max-width:380px;width:100%;max-height:90vh;overflow:auto"><b>${esc(nm(sid))} · ${d}</b><div style="height:8px"></div><select id="ce_s">${Object.keys(ST).map(k => `<option value="${k}" ${k === (e.s || "u") ? "selected" : ""}>${ST[k][0]} ${ST[k][1]}</option>`).join("")}</select><select id="ce_sh"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}" ${x === e.sh ? "selected" : ""}>${x.replace("-", " - ")}</option>`).join("")}</select><input id="ce_w" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)" value="${e.w || ""}">${co ? "" : `<input id="ce_f" type="number" min="0" step="any" placeholder="Uçuş süresi (saat)" value="${e.f || ""}">`}<button id="ce_ok">Kaydet</button>${ex.length ? '<button class="x" id="ce_del">Sil</button>' : ""}<button class="sec" id="ce_no">Vazgeç</button></div>`;
+  m.innerHTML = `<div class="card" style="max-width:380px;width:100%;max-height:90vh;overflow:auto"><b>${esc(nm(sid))} · ${d}</b><div style="height:8px"></div><select id="ce_s">${Object.keys(ST).map(k => `<option value="${k}" ${k === (e.s || "u") ? "selected" : ""}>${ST[k][0]} ${ST[k][1]}</option>`).join("")}</select><select id="ce_sh"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}" ${x === e.sh ? "selected" : ""}>${x.replace("-", " - ")}</option>`).join("")}</select><input id="ce_w" type="number" min="0" step="any" placeholder="Çalışma süresi (SS.DD, örn. 00.55)" value="${e.w || ""}">${co ? "" : `<input id="ce_f" type="number" min="0" step="any" placeholder="Uçuş süresi (SS.DD, örn. 00.55)" value="${e.f || ""}">`}<button id="ce_ok">Kaydet</button>${ex.length ? '<button class="x" id="ce_del">Sil</button>' : ""}<button class="sec" id="ce_no">Vazgeç</button></div>`;
   document.body.appendChild(m);
   const shEl = document.getElementById("ce_sh"); shEl.onchange = () => { if (!shEl.value) return; const [a, b] = shEl.value.split("-").map(parseFloat); document.getElementById("ce_w").value = b - a; };
   document.getElementById("ce_no").onclick = () => m.remove();
@@ -1009,6 +1012,7 @@ function cellEdit(sid, day) {
   document.getElementById("ce_ok").onclick = () => run(async () => {
     const s = val("ce_s"), off = s === "i" || s === "n", w = off ? 0 : (parseFloat(val("ce_w")) || 0), f = s === "u" ? (co ? 1 : (parseFloat(val("ce_f")) || 0)) : 0, sh = off ? "" : val("ce_sh");
     if (s === "u" && !(f > 0)) return alert("Uçuş saatini girin.");
+    if (badHM(w) || badHM(f)) return alert("Dakika kısmı 59'u geçemez (örn. 00.55 = 55 dakika).");
     await clearDay(sid, d); await insLog(d, sid, s, w, f, sh); m.remove(); render();
   });
 }
@@ -1017,7 +1021,8 @@ async function addL() {
   const w = (s === "i" || s === "n") ? 0 : (parseFloat(val("pw")) || 0), f = s === "u" ? (isCo(sid) ? 1 : (parseFloat(val("pf")) || 0)) : 0;
   if (!sid) return alert("Önce pilot ekleyin.");
   if (!d || (s === "u" && !(f > 0))) return alert("Tarih ve uçuş saatini girin.");
-  if (!isCo(sid) && f > w) return alert("Uçuş saati çalışma saatinden büyük olamaz.");
+  if (badHM(w) || badHM(f)) return alert("Dakika kısmı 59'u geçemez (örn. 00.55 = 55 dakika).");
+  if (!isCo(sid) && toMin(f) > toMin(w)) return alert("Uçuş saati çalışma saatinden büyük olamaz.");
   if (s === "u" || s === "c") {
     const n = wc(sid, mon(d), d), p = nm(sid);
     if (n > 6 && !confirm(p + " bu hafta " + n + ". gününe girecek. Haftalık 6 gün limiti aşılıyor, yine de kaydedilsin mi?")) return;
