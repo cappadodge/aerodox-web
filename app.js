@@ -773,13 +773,13 @@ function wInfo(sids) {
   return `<div class="card"><b>📅 Bu hafta uçuş günleri</b><div class="mu" style="margin:4px 0 8px">Kural: haftada en fazla 6 gün. Alana gidilen iptal günü de uçtu sayılır. 5. günde uyarı verilir. Bir gün önceden iptal (❌) günü sayacı sıfırlar.</div>${sids.map(sid => { const n = wc(sid, wk), c = n >= 6 ? "er" : n === 5 ? "wa" : "ok"; return `<div class="row" style="margin-bottom:6px"><span>${esc(nm(sid))}</span><span class="badge ${c}">${n} / 6 gün</span></div>`; }).join("")}</div>`;
 }
 function grid(m, sids, rows) {
-  const [y, mo] = m.split("-"), n = new Date(y, mo, 0).getDate(), pr = { u: 4, c: 3, i: 2, n: 1 }, c = {}, hv = {}, F = S.plTab !== "w", key = F ? "f" : "w";
-  rows.forEach(l => { const k = l.sid + "|" + Number(l.d.slice(8)); if (!c[k] || pr[l.s] > pr[c[k]]) c[k] = l.s; hv[k] = (hv[k] || 0) + l[key]; });
+  const [y, mo] = m.split("-"), n = new Date(y, mo, 0).getDate(), pr = { u: 4, c: 3, i: 2, n: 1 }, c = {}, hv = {}, ids = {}, ed = m === fd(new Date()).slice(0, 7) && canEditSched(), F = S.plTab !== "w", key = F ? "f" : "w";
+  rows.forEach(l => { const k = l.sid + "|" + Number(l.d.slice(8)); if (!c[k] || pr[l.s] > pr[c[k]]) c[k] = l.s; hv[k] = (hv[k] || 0) + l[key]; (ids[k] = ids[k] || []).push(l.id); });
   const days = Array.from({ length: n }, (_, i) => i + 1), tt = {};
   rows.forEach(l => { tt[l.sid] = (tt[l.sid] || 0) + l[key]; });
   const tc = 'style="text-align:center;font-weight:700;white-space:nowrap;padding:4px 8px"';
   const cell = k => hv[k] > 0 ? r2(hv[k]) : (c[k] && c[k] !== "u" ? ST[c[k]][0] : "");
-  return `<h2>${mn(m)} ${F ? "uçuş saati" : "çalışma saati"} çizelgesi</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>${F ? "Uçuş saati toplamı" : "Çalışma saati toplamı"}</th></tr>${sids.map(sid => `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => `<td>${cell(sid + "|" + d)}</td>`).join("")}<td ${tc}>${r2(tt[sid] || 0)}</td></tr>`).join("")}</table></div><p class="mu">Rakamlar o gün girilen saattir. 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
+  return `<h2>${mn(m)} ${F ? "uçuş saati" : "çalışma saati"} çizelgesi</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>${F ? "Uçuş saati toplamı" : "Çalışma saati toplamı"}</th></tr>${sids.map(sid => `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => { const k = sid + "|" + d; return ids[k] && ed ? `<td style="cursor:pointer" title="Silmek için dokun" onclick="run(()=>delDay('${ids[k].join(",")}'))">${cell(k)}</td>` : `<td>${cell(k)}</td>`; }).join("")}<td ${tc}>${r2(tt[sid] || 0)}</td></tr>`).join("")}</table></div><p class="mu">${ed ? "Yanlış girişi silmek için tablodaki hücreye dokun. " : ""}Rakamlar o gün girilen saattir. 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
 }
 function plView() {
   const cur = fd(new Date()).slice(0, 7), ed = S.month === cur;
@@ -793,7 +793,7 @@ function plView() {
   const [y, mo] = cur.split("-"), last = String(new Date(y, mo, 0).getDate()).padStart(2, "0"), today = fd(new Date());
   const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp" onchange="coSync()">${pil.map(x => `<option value="${x.id}">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</option>`).join("")}</select><select id="ps" onchange="coSync()"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" title="Co-Pilot: uçtuysa 1" min="0" step="any" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
   const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${r2(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${r2(t.f)}</b><div class="mu">${isCo(sid) ? "uçuş günü (Co-Pilot)" : "uçuş sa."}</div></div></div></div>`; }).join("");
-  const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
+  const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed && canEditSched() ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
   return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select><div style="display:flex;gap:8px;margin:14px 0 4px"><button class="${S.plTab !== "w" ? "" : "x"}" onclick="S.plTab=\'f\';render()">✈️ Uçuş saati çizelgesi</button><button class="${S.plTab === "w" ? "" : "x"}" onclick="S.plTab=\'w\';render()">🕓 Çalışma saati çizelgesi</button></div>${grid(m, sids, rows)}${pAdd()}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}</div>`;
 }
 function joinCard() {
@@ -980,6 +980,11 @@ async function addL() {
   const { data, error } = await sb.from("duty_logs").insert({ company_id: S.co, staff_id: sid, log_date: d, status: STATUS_TO_DB[s], duty_hours: w, flight_hours: f, ...(sh ? { shift: sh } : {}) }).select().single();
   if (error) throw error;
   S.logs.push({ id: data.id, d, sid, w, f, s, sh }); S.month = d.slice(0, 7); render();
+}
+async function delDay(csv) {
+  const ids = csv.split(","); if (!confirm("Bu güne ait " + ids.length + " kayıt silinsin mi?")) return;
+  const { error } = await sb.from("duty_logs").delete().in("id", ids); if (error) throw error;
+  S.logs = S.logs.filter(x => !ids.includes(x.id)); render();
 }
 async function delL(id) {
   if (!confirm("Bu kayıt silinsin mi?")) return;
