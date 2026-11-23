@@ -779,7 +779,7 @@ function grid(m, sids, rows) {
   rows.forEach(l => { tt[l.sid] = (tt[l.sid] || 0) + l[key]; });
   const tc = 'style="text-align:center;font-weight:700;white-space:nowrap;padding:4px 8px"';
   const cell = k => hv[k] > 0 ? r2(hv[k]) : (c[k] && c[k] !== "u" ? ST[c[k]][0] : "");
-  return `<h2>${mn(m)} ${F ? "uçuş saati" : "çalışma saati"} çizelgesi</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>${F ? "Uçuş saati toplamı" : "Çalışma saati toplamı"}</th></tr>${sids.map(sid => `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => { const k = sid + "|" + d; return ids[k] && ed ? `<td style="cursor:pointer" title="Silmek için dokun" onclick="run(()=>delDay('${ids[k].join(",")}'))">${cell(k)}</td>` : `<td>${cell(k)}</td>`; }).join("")}<td ${tc}>${r2(tt[sid] || 0)}</td></tr>`).join("")}</table></div><p class="mu">${ed ? "Yanlış girişi silmek için tablodaki hücreye dokun. " : ""}Rakamlar o gün girilen saattir. 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
+  return `<h2>${mn(m)} ${F ? "uçuş saati" : "çalışma saati"} çizelgesi</h2><div style="overflow-x:auto"><table class="gt"><tr><th class="nm"></th>${days.map(d => `<th>${d}</th>`).join("")}<th ${tc}>${F ? "Uçuş saati toplamı" : "Çalışma saati toplamı"}</th></tr>${sids.map(sid => `<tr><td class="nm">${esc(nm(sid))}</td>${days.map(d => { const k = sid + "|" + d; return ed ? `<td style="cursor:pointer" title="Düzenle / ekle" onclick="cellEdit('${sid}',${d})">${cell(k)}</td>` : `<td>${cell(k)}</td>`; }).join("")}<td ${tc}>${r2(tt[sid] || 0)}</td></tr>`).join("")}</table></div><p class="mu">${ed ? "Girmek, düzeltmek veya silmek için tablodaki hücreye dokun. " : ""}Rakamlar o gün girilen saattir. 🏖️ İzinli · 🚫 Alana gidildi, uçuş iptal · ❌ Önceden iptal, alana gidilmedi</p>`;
 }
 function plView() {
   const cur = fd(new Date()).slice(0, 7), ed = S.month === cur;
@@ -792,9 +792,10 @@ function plView() {
   const sids = [...new Set([...pil.map(x => x.id), ...Object.keys(tot)])];
   const [y, mo] = cur.split("-"), last = String(new Date(y, mo, 0).getDate()).padStart(2, "0"), today = fd(new Date());
   const form = `<div class="card"><b>Günlük kayıt</b><div style="height:8px"></div><input id="pd" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="pp" onchange="coSync()">${pil.map(x => `<option value="${x.id}">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</option>`).join("")}</select><select id="ps" onchange="coSync()"><option value="u">✈️ Uçtu</option><option value="i">🏖️ İzinli</option><option value="c">🚫 Alana gidildi, uçuş iptal</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option></select><select id="psh" onchange="shiftPick(this.value)"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}">${x.replace("-", " - ")}</option>`).join("")}</select><input id="pw" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)"><input id="pf" type="number" title="Co-Pilot: uçtuysa 1" min="0" step="any" placeholder="Uçuş süresi (saat)"><button onclick="run(addL)">Kaydet</button></div>`;
+  const bulk = `<details class="card"><summary><b>🗓 Toplu işaretle (izin / iptal)</b></summary><div style="height:8px"></div><div class="mu">Başlangıç - bitiş tarihi</div><input id="bd1" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><input id="bd2" type="date" value="${today}" min="${cur}-01" max="${cur}-${last}"><select id="bs"><option value="i">🏖️ İzinli</option><option value="n">❌ Önceden iptal (alana gidilmedi)</option><option value="c">🚫 Alana gidildi, uçuş iptal</option></select><div style="margin:8px 0">${pil.map(x => `<label style="display:block;padding:3px 0"><input type="checkbox" class="bp" value="${x.id}" checked style="width:auto;margin-right:8px">${esc(x.n)}${x.r === "Co-Pilot" ? " (Co-Pilot)" : ""}</label>`).join("")}</div><button onclick="run(bulkMark)">Seçililere uygula</button></details>`;
   const sum = Object.keys(tot).map(sid => { const t = tot[sid]; return `<div class="card"><b>${esc(nm(sid))}</b><div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px"><div><b>${t.g.size}</b><div class="mu">uçuş günü</div></div><div><b>${r2(t.w)}</b><div class="mu">çalışma sa.</div></div><div><b>${r2(t.f)}</b><div class="mu">${isCo(sid) ? "uçuş günü (Co-Pilot)" : "uçuş sa."}</div></div></div></div>`; }).join("");
   const list = rows.map(l => `<div class="card row"><div><b>${esc(nm(l.sid))}</b><div class="mu">${l.d} · ${ST[l.s].join(" ")} · ${l.sh ? "giriş-çıkış " + l.sh.replace("-", " - ") + " · " : ""}çalışma ${l.w} sa · uçuş ${l.f} sa</div></div>${ed && canEditSched() ? `<button class="x" onclick="run(()=>delL('${l.id}'))">Sil</button>` : ""}</div>`).join("");
-  return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select><div style="display:flex;gap:8px;margin:14px 0 4px"><button class="${S.plTab !== "w" ? "" : "x"}" onclick="S.plTab=\'f\';render()">✈️ Uçuş saati çizelgesi</button><button class="${S.plTab === "w" ? "" : "x"}" onclick="S.plTab=\'w\';render()">🕓 Çalışma saati çizelgesi</button></div>${grid(m, sids, rows)}${pAdd()}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}</div>`;
+  return `<div style="margin-top:14px">${wInfo(sids)}<select onchange="S.month=this.value;render()">${ms.map(x => `<option value="${x}" ${x === m ? "selected" : ""}>${mn(x)}${x === cur ? " (güncel)" : " (arşiv)"}</option>`).join("")}</select><div style="display:flex;gap:8px;margin:14px 0 4px"><button class="${S.plTab !== "w" ? "" : "x"}" onclick="S.plTab=\'f\';render()">✈️ Uçuş saati çizelgesi</button><button class="${S.plTab === "w" ? "" : "x"}" onclick="S.plTab=\'w\';render()">🕓 Çalışma saati çizelgesi</button></div>${grid(m, sids, rows)}${pAdd()}${ed && canEditSched() ? bulk : ''}${ed ? form : '<div class="card mu">📁 Arşivlenmiş ay: sadece görüntülenir.</div>'}<h2>${mn(m)} özeti</h2>${sum || '<p class="mu">Bu ay kayıt yok.</p>'}<h2>Günlük kayıtlar</h2>${list || '<p class="mu">Kayıt yok.</p>'}</div>`;
 }
 function joinCard() {
   const rows = (S.joins || []).map(j => `<div class="card" style="margin:8px 0"><b>${esc(j.full_name)}</b><div class="mu">Kullanıcı adı: ${esc(j.username || "")} · ${esc((j.created_at || "").slice(0, 10))}</div><select id="jb${j.id}"><option value="">Personel kaydı oluşturma</option>${ROLES.map(r => `<option>${r}</option>`).join("")}</select><button onclick="run(()=>approveJ('${j.id}'))">Onayla</button><button class="x" onclick="run(()=>rejectJ('${j.id}'))">Reddet</button></div>`).join("");
@@ -965,6 +966,40 @@ async function setRole() {
   const id = val("rp"), r = val("rr"), x = S.people.find(p => p.id === id); if (!x) return;
   const { error } = await sb.from("staff").update({ job_title: ROLE_TO_DB[r] || "other" }).eq("id", id); if (error) throw error;
   x.r = r; const a = S.allStaff.find(p => p.id === id); if (a) a.r = r; render();
+}
+async function insLog(d, sid, s, w, f, sh) {
+  const { data, error } = await sb.from("duty_logs").insert({ company_id: S.co, staff_id: sid, log_date: d, status: STATUS_TO_DB[s], duty_hours: w, flight_hours: f, ...(sh ? { shift: sh } : {}) }).select().single();
+  if (error) throw error;
+  S.logs.push({ id: data.id, d, sid, w, f, s, sh: sh || "" });
+}
+async function clearDay(sid, d) {
+  const ids = S.logs.filter(l => l.sid === sid && l.d === d).map(l => l.id); if (!ids.length) return;
+  const { error } = await sb.from("duty_logs").delete().in("id", ids); if (error) throw error;
+  S.logs = S.logs.filter(l => !ids.includes(l.id));
+}
+async function bulkMark() {
+  const a = val("bd1"), b = val("bd2"), s = val("bs"), sids = [...document.querySelectorAll(".bp:checked")].map(x => x.value);
+  if (!a || !b || b < a) return alert("Tarih aralığını kontrol edin.");
+  if (!sids.length) return alert("En az bir kişi seçin.");
+  const days = []; for (let t = new Date(a + "T12:00:00"); fd(t) <= b; t.setDate(t.getDate() + 1)) days.push(fd(t));
+  if (!confirm(sids.length + " kişi için " + days.length + " gün " + ST[s][1] + " olarak işaretlensin mi? Aynı günlerdeki mevcut kayıtlar değiştirilir.")) return;
+  for (const sid of sids) for (const d of days) { await clearDay(sid, d); await insLog(d, sid, s, 0, 0, ""); }
+  S.month = a.slice(0, 7); render();
+}
+function cellEdit(sid, day) {
+  const d = S.month + "-" + String(day).padStart(2, "0"), ex = S.logs.filter(l => l.sid === sid && l.d === d), e = ex[0] || {}, co = isCo(sid);
+  const old = document.getElementById("cem"); if (old) old.remove();
+  const m = document.createElement("div"); m.id = "cem"; m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:flex;align-items:center;justify-content:center;padding:16px";
+  m.innerHTML = `<div class="card" style="max-width:380px;width:100%;max-height:90vh;overflow:auto"><b>${esc(nm(sid))} · ${d}</b><div style="height:8px"></div><select id="ce_s">${Object.keys(ST).map(k => `<option value="${k}" ${k === (e.s || "u") ? "selected" : ""}>${ST[k][0]} ${ST[k][1]}</option>`).join("")}</select><select id="ce_sh"><option value="">Giriş-çıkış saati (seçiniz)</option>${SHIFTS.map(x => `<option value="${x}" ${x === e.sh ? "selected" : ""}>${x.replace("-", " - ")}</option>`).join("")}</select><input id="ce_w" type="number" min="0" step="any" placeholder="Çalışma süresi (saat)" value="${e.w || ""}">${co ? "" : `<input id="ce_f" type="number" min="0" step="any" placeholder="Uçuş süresi (saat)" value="${e.f || ""}">`}<button id="ce_ok">Kaydet</button>${ex.length ? '<button class="x" id="ce_del">Sil</button>' : ""}<button class="sec" id="ce_no">Vazgeç</button></div>`;
+  document.body.appendChild(m);
+  const shEl = document.getElementById("ce_sh"); shEl.onchange = () => { if (!shEl.value) return; const [a, b] = shEl.value.split("-").map(parseFloat); document.getElementById("ce_w").value = b - a; };
+  document.getElementById("ce_no").onclick = () => m.remove();
+  const dl = document.getElementById("ce_del"); if (dl) dl.onclick = () => { if (!confirm("Bu güne ait kayıt silinsin mi?")) return; run(async () => { await clearDay(sid, d); m.remove(); render(); }); };
+  document.getElementById("ce_ok").onclick = () => run(async () => {
+    const s = val("ce_s"), off = s === "i" || s === "n", w = off ? 0 : (parseFloat(val("ce_w")) || 0), f = s === "u" ? (co ? 1 : (parseFloat(val("ce_f")) || 0)) : 0, sh = off ? "" : val("ce_sh");
+    if (s === "u" && !(f > 0)) return alert("Uçuş saatini girin.");
+    await clearDay(sid, d); await insLog(d, sid, s, w, f, sh); m.remove(); render();
+  });
 }
 async function addL() {
   const d = val("pd"), sid = val("pp"), s = val("ps"), sh = (s === "i" || s === "n") ? "" : val("psh");
